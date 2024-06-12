@@ -36,7 +36,7 @@ from common.class_loader.module_installer import install_if_missing, install_fak
 
 # The name of current active addon to be created, tested or released
 # 要创建、测试或发布的当前活动插件的名称
-ACTIVE_ADDON = "sample_addon"
+ACTIVE_ADDON = "Test_Addon"
 
 # The path of the blender executable. Blender2.93 is the minimum version required
 # Blender可执行文件的路径，Blender2.93是所需的最低版本

@@ -1,3 +1,4 @@
+import bmesh
 import bpy
 
 from addons.Test_Addon.config import __addon_name__
@@ -18,11 +19,5 @@ class ExampleOperator(bpy.types.Operator):
         return context.active_object is not None
 
     def execute(self, context: bpy.types.Context):
-        addon_prefs = bpy.context.preferences.addons[__addon_name__].preferences
-        assert isinstance(addon_prefs, ExampleAddonPreferences)
-        # use operator
-        # bpy.ops.transform.resize(value=(2, 2, 2))
-
-        # manipulate the scale directly
-        context.active_object.scale *= addon_prefs.number
+        objects = context.selected_objects
         return {'FINISHED'}
