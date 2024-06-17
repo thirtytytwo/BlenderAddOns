@@ -5,8 +5,8 @@ import numpy
 from mathutils import Vector
 
 
-from addons.Test_Addon.config import __addon_name__
-from addons.Test_Addon.preference.AddonPreferences import ExampleAddonPreferences
+from addons.test_addon.config import __addon_name__
+from addons.test_addon.preference.AddonPreferences import ExampleAddonPreferences
 
 
 # This Example Operator will scale up the selected object

@@ -1,7 +1,7 @@
 import bpy
 
-from addons.Test_Addon.config import __addon_name__
-from addons.Test_Addon.operators.AddonOperators import ExampleOperator
+from addons.test_addon.config import __addon_name__
+from addons.test_addon.operators.AddonOperators import ComputeOutlineNormalOperator
 from common.i18n.i18n import i18n
 
 
@@ -15,18 +15,9 @@ class ExampleAddonPanel(bpy.types.Panel):
 
     def draw(self, context: bpy.types.Context):
         addon_prefs = context.preferences.addons[__addon_name__].preferences
-
         layout = self.layout
 
-        layout.label(text=i18n("Example Functions") + ": " + str(addon_prefs.number))
-        layout.prop(addon_prefs, "filepath")
-        layout.separator()
-
-        row = layout.row()
-        row.prop(addon_prefs, "number")
-        row.prop(addon_prefs, "boolean")
-
-        layout.operator(ExampleOperator.bl_idname)
+        layout.operator(ComputeOutlineNormalOperator.bl_idname)
 
     @classmethod
     def poll(cls, context: bpy.types.Context):
