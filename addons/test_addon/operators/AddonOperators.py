@@ -27,81 +27,69 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         self.smooth_normal_dic  = {}
         self.sum_normal_dic     = {}
         
-        self.tangent_dic        = {}
-        self.bitangent_dic      = {}
-        self.normal_dic         = {}
-        
     def clean_container(self):
         self.pack_normal_dic.clear()
         self.smooth_normal_dic.clear()
         self.sum_normal_dic.clear()
-        
-        self.tangent_dic.clear()
-        self.bitangent_dic.clear()
-        self.normal_dic.clear()
-    
+
     def octahedron_pack(self):
         for index, IN in self.smooth_normal_dic.items():
-            IN = Vector(IN)
-            IN /= (math.fabs(IN.x) + math.fabs(IN.y) + math.fabs(IN.z))
+            IN = Vector(IN).normalized()
+            
+            sum_xyz = math.fabs(IN.x) + math.fabs(IN.y) + math.fabs(IN.z)
+            
+            u = IN.x / sum_xyz
+            v = IN.y / sum_xyz
+            
             if IN.z < 0.0:
-                result = Vector((1.0 - math.fabs(IN.y) * (1.0 if IN.x >= 0 else -1.0), 1.0 - math.fabs(IN.x) * (1.0 if IN.y >= 0 else -1.0)))
-            else:
-                result = Vector((IN.x, IN.y))
-            result = Vector(((result.x * 0.5 + 0.5), (result.y * 0.5 + 0.5)))
+                u = (1 - math.fabs(v) * (1 if u >= 0 else -1))
+                v = (1 - math.fabs(u) * (1 if v >= 0 else -1))
+            result = Vector(((u * 0.5 + 0.5), (v * 0.5 + 0.5)))
             self.pack_normal_dic[index] = result
             
     def compute_smooth_normals(self, bm):
         bmesh.ops.triangulate(bm, faces=bm.faces[:])
         for face in bm.faces:
-            verts = face.verts[:]
-            for i in range(len(verts) - 1):
+            loops = face.loops
+            for loop in loops:
                 #compute vert
-                #TODO:是不是坐标轴不一样需要在这里做处理 
-                v0 = verts[i].co
-                v1 = verts[(i + 1) % 3].co
-                v2 = verts[(i + 2) % 3].co
+                v0 = loop.vert.co
+                v1 = loop.link_loop_next.vert.co
+                v2 = loop.link_loop_prev.vert.co
                 
-                #compute dir
-                dir0 = v1 - v0
-                dir1 = v2 - v0
-                dot_val = float(dir0.dot(dir1))
-                cosine = math.fabs(math.cos(dot_val))
+                #变换手系
+                transform_matrix = Matrix([
+                    [1, 0, 0],
+                    [0, 0, 1],
+                    [0, -1, 0]
+                ])
                 
-                index = verts[i].index
+                v0 = transform_matrix @ v0
+                v1 = transform_matrix @ v1
+                v2 = transform_matrix @ v2
+
+                dir0 = (v1 - v0).normalized()
+                dir1 = (v2 - v0).normalized()
                 
-                #compute T B N 
                 normal = dir0.cross(dir1).normalized()
-            
-                tangent = dir0
-                bitangent = dir1
                 
-                tangent = tangent.cross(normal)
-                bitangent = bitangent.cross(normal)
-                tangent.normalize()
-                bitangent.normalize()
+                cos_theta = dir0.dot(dir1) / (dir0.length * dir1.length)
+                theta = math.acos(cos_theta)
+                weight = (theta / math.pi)
                 
-                #write into dic
-                self.tangent_dic[index] = tangent
-                self.bitangent_dic[index] = bitangent
-                self.normal_dic[index] = normal
-            
-                if index not in self.smooth_normal_dic.keys():
-                    self.sum_normal_dic[index] = normal.xyz * cosine
+                index = loop.vert.index
+                
+                if index not in self.sum_normal_dic.keys():
+                    self.sum_normal_dic[index] = normal
                 else:
-                    self.sum_normal_dic[index] += normal.xyz * cosine
+                    self.sum_normal_dic[index] += normal * weight
+                
         
         #求和后的平滑法线转切线空间
         for index, IN in self.sum_normal_dic.items():
             IN.normalize()
+            self.smooth_normal_dic[index] = IN
             
-            tbn_matrix = Matrix((self.tangent_dic[index], self.bitangent_dic[index], self.normal_dic[index]))
-            tbn_matrix.transpose()
-            normal = tbn_matrix @ IN
-            normal.normalize()
-            
-            self.smooth_normal_dic[index] = normal
-        
         self.octahedron_pack()
 
     def add_custom_data_layer(self, mesh):
