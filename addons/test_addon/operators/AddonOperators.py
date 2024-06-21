@@ -17,9 +17,7 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     sum_normal_dic    :Dict[int, Vector]
     smooth_normal_dic :Dict[int, Vector]
     
-    tangent_dic       :Dict[int, Vector]
-    bitangent_dic     :Dict[int, Vector]
-    normal_dic        :Dict[int, Vector]
+    tbn_matrix_dic    :Dict[int, Matrix]
     
     def __init__(self):
         # 在构造函数中初始化字典
@@ -27,10 +25,13 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         self.smooth_normal_dic  = {}
         self.sum_normal_dic     = {}
         
+        self.tbn_matrix_dic     = {}
+        
     def clean_container(self):
         self.pack_normal_dic.clear()
         self.smooth_normal_dic.clear()
         self.sum_normal_dic.clear()
+        self.tbn_matrix_dic.clear()
 
     def octahedron_pack(self):
         for index, IN in self.smooth_normal_dic.items():
@@ -42,20 +43,31 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             v = IN.y / sum_xyz
             
             if IN.z < 0.0:
-                u = (1 - math.fabs(v) * (1 if u >= 0 else -1))
-                v = (1 - math.fabs(u) * (1 if v >= 0 else -1))
+                u = ((1 - math.fabs(v)) * (1 if u >= 0 else -1))
+                v = ((1 - math.fabs(u)) * (1 if v >= 0 else -1))
             result = Vector(((u * 0.5 + 0.5), (v * 0.5 + 0.5)))
             self.pack_normal_dic[index] = result
             
     def compute_smooth_normals(self, bm):
         bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        # get origin uvs 
+        if not bm.loops.layers.uv:
+            self.report({'ERROR'}, "No UV layer found")
+            return {'CANCELLED'}
+        uv_layer = bm.loops.layers.uv[0]
+        
         for face in bm.faces:
             loops = face.loops
+            
             for loop in loops:
                 #compute vert
                 v0 = loop.vert.co
                 v1 = loop.link_loop_next.vert.co
                 v2 = loop.link_loop_prev.vert.co
+                
+                uv0 = loop[uv_layer].uv
+                uv1 = loop.link_loop_next[uv_layer].uv
+                uv2 = loop.link_loop_prev[uv_layer].uv
                 
                 #变换手系
                 transform_matrix = Matrix([
@@ -71,24 +83,42 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                 dir0 = (v1 - v0).normalized()
                 dir1 = (v2 - v0).normalized()
                 
+                delta_uv0 = uv1 - uv0
+                delta_uv1 = uv2 - uv0
+                
+                print(delta_uv0, delta_uv1)
+                
+                #compute TBN matrix
+                f = 1.0 / (delta_uv0.x * delta_uv1.y - delta_uv0.y * delta_uv1.x)
+                
+                tangent = (f * (dir0 * delta_uv1.y - dir1 * delta_uv0.y)).normalized()
+                bitangent = (f * (dir1 * delta_uv0.x - dir0 * delta_uv1.x)).normalized()
                 normal = dir0.cross(dir1).normalized()
                 
+                tbn_matrix = Matrix((tangent, bitangent, normal)).transposed()
+                
+                #compute smooth normal weight
                 cos_theta = dir0.dot(dir1) / (dir0.length * dir1.length)
                 theta = math.acos(cos_theta)
                 weight = (theta / math.pi)
                 
                 index = loop.vert.index
                 
+                self.tbn_matrix_dic[index] = tbn_matrix
+                
                 if index not in self.sum_normal_dic.keys():
                     self.sum_normal_dic[index] = normal
                 else:
-                    self.sum_normal_dic[index] += normal * weight
+                    self.sum_normal_dic[index] += normal
                 
         
         #求和后的平滑法线转切线空间
         for index, IN in self.sum_normal_dic.items():
             IN.normalize()
-            self.smooth_normal_dic[index] = IN
+            transform_matrix = self.tbn_matrix_dic[index]
+            transform_normal = transform_matrix @ IN
+            #print(transform_matrix @ IN)
+            self.smooth_normal_dic[index] = transform_normal
             
         self.octahedron_pack()
 
