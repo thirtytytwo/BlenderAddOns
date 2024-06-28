@@ -1,7 +1,7 @@
 import bmesh
 import bpy
 import math
-from typing import Dict
+from typing import Dict, List
 from mathutils import Vector, Matrix
 
 # This Example Operator will scale up the selected object
@@ -13,11 +13,13 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     # 确保在操作之前备份数据，用户撤销操作时可以恢复
     bl_options = {'REGISTER', 'UNDO'}
 
+    sum_normal_dic    :Dict[Vector, Vector]
     pack_normal_dic   :Dict[int, Vector]
-    sum_normal_dic    :Dict[int, Vector]
     smooth_normal_dic :Dict[int, Vector]
     
     tbn_matrix_dic    :Dict[int, Matrix]
+    
+    same_normal_dic   :Dict[Vector, List[Vector]]
     
     def __init__(self):
         # 在构造函数中初始化字典
@@ -27,12 +29,20 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         
         self.tbn_matrix_dic     = {}
         
+        self.same_normal_dic    = {}
+        
     def clean_container(self):
         self.pack_normal_dic.clear()
         self.smooth_normal_dic.clear()
         self.sum_normal_dic.clear()
         self.tbn_matrix_dic.clear()
 
+    def ortho_normalize(self, tangent, normal):
+        result0 = tangent.normalized()
+        result1 = normal - normal.dot(result0) * result0
+        result1 = result1.normalized()
+        return result0, result1
+    
     def octahedron_pack(self):
         for index, IN in self.smooth_normal_dic.items():
             IN = Vector(IN).normalized()
@@ -48,56 +58,116 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             result = Vector(((u * 0.5 + 0.5), (v * 0.5 + 0.5)))
             self.pack_normal_dic[index] = result
             
-    def compute_smooth_normals(self, mesh):
-        #TODO:存储TBN的index 和 vertices的nidex不一致，可能导致TBN的dic读不到数据的问题
-        #get TBN matrix
-        for loop in mesh.loops:
-            index = loop.vertex_index
-            tangent = loop.tangent
-            normal = loop.normal
-            bitangent = loop.bitangent
-            self.tbn_matrix_dic[index] = Matrix((tangent, bitangent, normal)).transpose()
+    def compute_smooth_normals(self, bm):
+        #检查UV
+        if not bm.loops.layers.uv[0]:
+            self.report({'ERROR'}, "No active UV")
+            return {'CANCELED'}
+        uv_layer = bm.loops.layers.uv[0]
         
-        for tris in mesh.loop_triangles:
-            for i in range(3):
-                v0 = mesh.vertices[tris.vertices[i]].co
-                v1 = mesh.vertices[tris.vertices[(i + 1) % 3]].co
-                v2 = mesh.vertices[tris.vertices[(i + 2) % 3]].co
-                
-                dir0 = (v1 - v0).normalized()
-                dir1 = (v2 - v0).normalized()
-                
-                theta = math.acos(dir0.dot(dir1))
-                weight = theta / math.pi
-                
-                index = mesh.vertices[tris.vertices[i]].index
-                if index not in self.sum_normal_dic.keys():
-                    self.sum_normal_dic[index] = normal * weight
-                else: 
-                    self.sum_normal_dic[index] += normal * weight
-                    
-        #transform sum normals to tangent space and writ into smooth normal dic
-        for index, IN in self.sum_normal_dic.items():
-            IN.normalize()
-            transform_matrix = self.tbn_matrix_dic.get(index)
-            if transform_matrix is not None:
-                transform_normal = transform_matrix @ IN
-                self.smooth_normal_dic[index] = transform_normal
+        for face in bm.faces:
+            #检查三角面 只允许三角面计算
+            if len(face.verts)!= 3:
+                self.report({'ERROR'}, "Only Triangles")
+                return {'CANCELED'}
             
+            #顶点, UV
+            v0 = face.loops[0].vert.co
+            v1 = face.loops[1].vert.co
+            v2 = face.loops[2].vert.co
+            
+            uv0 = face.loops[0][uv_layer].uv
+            uv1 = face.loops[1][uv_layer].uv
+            uv2 = face.loops[2][uv_layer].uv
+            
+            ####计算TBN矩阵####
+            #选取切线基(最短两条三角边)
+            len0 = (v0 - v1).length
+            len1 = (v0 - v2).length
+            len2 = (v1 - v2).length
+            if len0 >= len1 and len0 >= len2:
+                edge0 = v0 - v2
+                edge1 = v1 - v2
+                delta_uv0 = uv0 - uv2
+                delta_uv1 = uv1 - uv2
+            elif len1 >= len0 and len1 >= len2: 
+                edge0 = v0 - v1
+                edge1 = v2 - v1
+                delta_uv0 = uv0 - uv1
+                delta_uv1 = uv2 - uv1
+            else:
+                edge0 = v2 - v0
+                edge1 = v1 - v0
+                delta_uv0 = uv2 - uv0
+                delta_uv1 = uv1 - uv0
+            #计算切线
+            f = 1.0 / (delta_uv0.x * delta_uv1.y - delta_uv0.y * delta_uv1.x)
+            tangent = Vector((f * (delta_uv1.y * edge0.x - delta_uv0.y * edge1.x),
+                              f * (delta_uv1.y * edge0.y - delta_uv0.y * edge1.y),
+                              f * (delta_uv1.y * edge0.z - delta_uv0.y * edge1.z)
+                            )).normalized()
+            #计算法线
+            normal = edge1.cross(edge0).normalized()
+            #切线法线正交化
+            tangent_norm, normal_norm = self.ortho_normalize(tangent, normal)
+            #副切线
+            bitangent = tangent_norm.cross(normal_norm).normalized()
+            #TBN矩阵
+            tbn_matrix = Matrix((tangent_norm, bitangent, normal_norm)).transposed()
+            
+            #写入数据到字典(重复的法线需要剔除)
+            for loop in face.loops:
+                index_vector = Vector(loop.vert.co).freeze()
+                index = loop.index
+                
+                #剔除重复法线
+                                
+                self.tbn_matrix_dic[index] = tbn_matrix
+                if index_vector not in self.sum_normal_dic.keys():
+                    self.sum_normal_dic[index_vector] = normal_norm
+                else:
+                    self.sum_normal_dic[index_vector] += normal_norm
+        
+        #得到平滑法线后转入TBN空间
+        for face in bm.faces:
+            for loop in face.loops:
+                index = loop.index
+                index_vector = Vector(loop.vert.co).freeze()
+                
+                sum_normal = self.sum_normal_dic[index_vector]
+                sum_normal = sum_normal.normalized()
+                
+                tbn_matrix = self.tbn_matrix_dic[index]
+                
+                smooth_normal = tbn_matrix @ sum_normal
+                smooth_normal.normalize()
+                print(smooth_normal)
+                
+                self.smooth_normal_dic[index] = smooth_normal
+        
         self.octahedron_pack()
 
     def add_custom_data_layer(self, mesh):
-        if not mesh.uv_layers.active:
-            self.report({'ERROR'}, "No active UV")
-            return {'CANCELED'}
-        mesh.calc_tangents()
+        #转换bmesh
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
         
-        self.compute_smooth_normals(mesh)
+        #计算
+        self.compute_smooth_normals(bm)
         
-        if "UVSet3" not in mesh.uv_layers:
-            mesh.uv_layers.new(name="UVSet3")
+        #写入数据
+        if "UVSet3" not in bm.loops.layers.uv:
+            bm.loops.layers.uv.new("UVSet3")
+        else:
+            self.report({'WARNING'}, "UVSet3 already exists, and we rewrite it.")
+        uv_layer = bm.loops.layers.uv["UVSet3"]
         
-        
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[uv_layer].uv = self.pack_normal_dic[loop.index]
+        #传回网格
+        bm.to_mesh(mesh)
+        bm.free()
 
     @classmethod
     def poll(cls, context: bpy.types.Context):
