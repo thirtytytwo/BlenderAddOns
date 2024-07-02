@@ -19,9 +19,15 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     
     tbn_matrix_dic    :Dict[int, Matrix]
     
-    same_normal_dic   :Dict[Vector, List[Vector]]
-    
+    same_normal_dic   :Dict[Vector, list[Vector]]
 
+    def clean_containers(self):
+        self.sum_normal_dic.clear()
+        self.pack_normal_dic.clear()
+        self.smooth_normal_dic.clear()
+        self.tbn_matrix_dic.clear()
+        self.same_normal_dic.clear()
+        
     def ortho_normalize(self, tangent, normal):
         result0 = tangent.normalized()
         result1 = normal - normal.dot(result0) * result0
@@ -101,15 +107,11 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             tbn_matrix = Matrix((tangent_norm, bitangent, normal_norm)).transposed()
             
             #写入数据到字典(重复的法线需要剔除)
-            #TODO:python字典有问题
             for loop in face.loops:
                 index_vector = Vector(loop.vert.co).freeze()
                 index = loop.index
                 
-                #剔除重复法线
-                if index_vector not in self.same_normal_dic:
-                    self.same_normal_dic[index_vector] = [normal_norm]
-                else:
+                if index_vector in self.same_normal_dic:
                     flag = False
                     for same_normal in self.same_normal_dic[index_vector]:
                         if same_normal == normal_norm:
@@ -118,7 +120,9 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                     if flag:
                         continue
                     else:
-                        self.same_normal_dic[index_vector].append(normal_norm)
+                        self.same_normal_dic[index_vector].append(same_normal)
+                else:
+                    self.same_normal_dic[index_vector] = [normal_norm]
                 
                 self.tbn_matrix_dic[index] = tbn_matrix
                 if index_vector not in self.sum_normal_dic:
@@ -133,13 +137,13 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                 index_vector = Vector(loop.vert.co).freeze()
                 
                 sum_normal = self.sum_normal_dic[index_vector]
+                print(sum_normal)
                 sum_normal = sum_normal.normalized()
                 
                 tbn_matrix = self.tbn_matrix_dic[index]
                 
                 smooth_normal = tbn_matrix @ sum_normal
                 smooth_normal.normalize()
-                print(smooth_normal)
                 
                 self.smooth_normal_dic[index] = smooth_normal
         
@@ -172,10 +176,16 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         return context.active_object is not None
 
     def execute(self, context: bpy.types.Context):
+        self.sum_normal_dic = {}
+        self.pack_normal_dic = {}
+        self.smooth_normal_dic = {}
+        self.tbn_matrix_dic = {}
+        self.same_normal_dic = {}
+        
         objects = context.selected_objects
         for object in objects:
             mesh = object.data
             self.add_custom_data_layer(mesh)
         
-        self.clean_container()
+        self.clean_containers()
         return {'FINISHED'}
