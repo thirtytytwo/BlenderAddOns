@@ -111,24 +111,25 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                 index_vector = Vector(loop.vert.co).freeze()
                 index = loop.index
                 
+                self.tbn_matrix_dic[index] = tbn_matrix
+                
                 if index_vector in self.same_normal_dic:
                     flag = False
                     for same_normal in self.same_normal_dic[index_vector]:
-                        if same_normal == normal_norm:
+                        if same_normal == Vector(normal_norm):
                             flag = True
                             break
                     if flag:
                         continue
                     else:
-                        self.same_normal_dic[index_vector].append(same_normal)
+                        self.same_normal_dic[index_vector].append(Vector(normal_norm))
                 else:
-                    self.same_normal_dic[index_vector] = [normal_norm]
+                    self.same_normal_dic[index_vector] = [Vector(normal_norm)]
                 
-                self.tbn_matrix_dic[index] = tbn_matrix
                 if index_vector not in self.sum_normal_dic:
-                    self.sum_normal_dic[index_vector] = normal_norm
+                    self.sum_normal_dic[index_vector] = Vector(normal_norm)
                 else:
-                    self.sum_normal_dic[index_vector] += normal_norm
+                    self.sum_normal_dic[index_vector] += Vector(normal_norm)
         
         #得到平滑法线后转入TBN空间
         for face in bm.faces:
@@ -137,13 +138,13 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                 index_vector = Vector(loop.vert.co).freeze()
                 
                 sum_normal = self.sum_normal_dic[index_vector]
-                print(sum_normal)
                 sum_normal = sum_normal.normalized()
                 
                 tbn_matrix = self.tbn_matrix_dic[index]
                 
                 smooth_normal = tbn_matrix @ sum_normal
                 smooth_normal.normalize()
+                print(smooth_normal)
                 
                 self.smooth_normal_dic[index] = smooth_normal
         
