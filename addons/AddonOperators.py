@@ -1,7 +1,7 @@
 import bmesh
 import bpy
 import math
-from typing import Dict, List
+from typing import Dict
 from mathutils import Vector, Matrix
 
 # This Example Operator will scale up the selected object
@@ -35,18 +35,21 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     def octahedron_pack(self):
         for index, IN in self.smooth_normal_dic.items():
             IN = Vector(IN).normalized()
+            if IN.z == 0:
+                self.pack_normal_dic[index] = Vector((0.5, 0.5))
+                continue
             sum_xyz = math.fabs(IN.x) + math.fabs(IN.y) + math.fabs(IN.z)
             
             u = IN.x / sum_xyz
             v = IN.y / sum_xyz
-            
+
             if IN.z < 0.0:
                 u = ((1 - math.fabs(v)) * (1 if u >= 0 else -1))
                 v = ((1 - math.fabs(u)) * (1 if v >= 0 else -1))
             result = Vector(((u * 0.5 + 0.5), (v * 0.5 + 0.5)))
             self.pack_normal_dic[index] = result
             
-    def compute_smooth_normals(self, bm):
+    def compute_smooth_normals(self, bm):   
         #检查UV
         if not bm.loops.layers.uv[0]:
             self.report({'ERROR'}, "No active UV")
@@ -73,6 +76,15 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                 delta_uv1 = uv1 - uv0
                 delta_uv2 = uv2 - uv0
                 
+                if (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y) == 0:
+                    matrix = Matrix()
+                    matrix.zero()
+                    self.tbn_matrix_dic[index] = matrix
+                    if index_vec not in self.sum_normal_dic:   
+                        self.sum_normal_dic[index_vec] = Vector()
+                    else:
+                        self.sum_normal_dic[index_vec] += Vector()
+                    continue
                 f = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y)
                 tangent = Vector(f * (delta_uv2.y * edge1 - delta_uv1.y * edge2))
                 normal = face.normal
