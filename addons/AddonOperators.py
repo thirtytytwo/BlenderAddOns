@@ -58,80 +58,60 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             if len(face.verts)!= 3:
                 self.report({'ERROR'}, "Only Triangles")
                 return {'CANCELED'}
-            # for i in range(3):
-            #     index = face.loops[i].index
-            #     index_vec = Vector(face.verts[i].co).freeze()
+            for i in range(3):
+                index = face.loops[i].index
+                index_vec = Vector(face.verts[i].co).freeze()
                 
-            #     v0 = face.loops[i].vert.co
-            #     v1 = face.loops[(i+1)%3].vert.co
-            #     v2 = face.loops[(i+2)%3].vert.co
-            #     uv0 = face.loops[i][uv_layer].uv
-            #     uv1 = face.loops[(i+1)%3][uv_layer].uv
-            #     uv2 = face.loops[(i+2)%3][uv_layer].uv
-            #     edge1 = v1 - v0
-            #     edge2 = v2 - v0
-            #     delta_uv1 = uv1 - uv0
-            #     delta_uv2 = uv2 - uv0
-                
-            #     f = 1.0 / (delta_uv1.y * delta_uv2.x - delta_uv2.y * delta_uv1.x)
-            #     tangent = Vector(f * (delta_uv1.y * edge2 - delta_uv2.y * edge1))
-            #     normal = face.normal
-            for loop in face.loops:
-                index_vector = Vector(loop.vert.co).freeze()
-                index = loop.index
-                
-                v0 = loop.vert.co
-                v1 = loop.link_loop_next.vert.co
-                v2 = loop.link_loop_prev.vert.co
-                uv0 = loop[uv_layer].uv
-                uv1 = loop.link_loop_next[uv_layer].uv
-                uv2 = loop.link_loop_prev[uv_layer].uv
-                edge0 = v2 - v0
+                v0 = face.loops[i].vert.co
+                v1 = face.loops[(i+1)%3].vert.co
+                v2 = face.loops[(i+2)%3].vert.co
+                uv0 = face.loops[i][uv_layer].uv    
+                uv1 = face.loops[(i+1)%3][uv_layer].uv
+                uv2 = face.loops[(i+2)%3][uv_layer].uv
                 edge1 = v1 - v0
-                delta_uv0 = uv2 - uv0
+                edge2 = v2 - v0
                 delta_uv1 = uv1 - uv0
-                f = 1.0 / (delta_uv0.x * delta_uv1.y - delta_uv0.y * delta_uv1.x)
-                tangent=Vector((f * (delta_uv1.y * edge0.x - delta_uv0.y * edge1.x),
-                                f * (delta_uv1.y * edge0.y - delta_uv0.y * edge1.y),
-                                f * (delta_uv1.y * edge0.z - delta_uv0.y * edge1.z)
-                                )).normalized()
+                delta_uv2 = uv2 - uv0
+                
+                f = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y)
+                tangent = Vector(f * (delta_uv2.y * edge1 - delta_uv1.y * edge2))
                 normal = face.normal
-                tangent_norm = self.ortho_normalize(tangent, normal)
-                bitangent = normal.cross(tangent_norm).normalized()
-                print(tangent, tangent_norm)
+                tangent = self.ortho_normalize(tangent, normal)
+                bitangent = Vector(normal.cross(tangent)).normalized()
+                tbn_matrix = Matrix((tangent,bitangent,normal)).transposed()
                 
-                self.tbn_matrix_dic[index] = Matrix((tangent_norm, bitangent, normal)).transposed()
+                self.tbn_matrix_dic[index] = tbn_matrix
                 
-                if index_vector in self.same_normal_dic:
+                if index_vec in self.same_normal_dic:
                     flag = False
-                    for same_normal in self.same_normal_dic[index_vector]:
+                    for same_normal in self.same_normal_dic[index_vec]:
                         if same_normal == Vector(normal):
                             flag = True
                             break
                     if flag:
                         continue
                     else:
-                        self.same_normal_dic[index_vector].append(Vector(normal))
+                        self.same_normal_dic[index_vec].append(Vector(normal))
                 else:
-                    self.same_normal_dic[index_vector] = [Vector(normal)]
+                    self.same_normal_dic[index_vec] = [Vector(normal)]
                 
-                if index_vector not in self.sum_normal_dic:
-                    self.sum_normal_dic[index_vector] = Vector(normal)
+                if index_vec not in self.sum_normal_dic:   
+                    self.sum_normal_dic[index_vec] = Vector(normal)
                 else:
-                    self.sum_normal_dic[index_vector] += Vector(normal)
+                    self.sum_normal_dic[index_vec] += Vector(normal)
         
         #得到平滑法线后转入TBN空间
         for face in bm.faces:
             for loop in face.loops:
                 index = loop.index
-                index_vector = Vector(loop.vert.co).freeze()
+                index_vec = Vector(loop.vert.co).freeze()
                 
-                sum_normal = self.sum_normal_dic[index_vector]
+                sum_normal = self.sum_normal_dic[index_vec]
                 sum_normal = sum_normal.normalized()
                 
                 tbn_matrix = self.tbn_matrix_dic[index]
                 
-                smooth_normal = tbn_matrix @ sum_normal
+                smooth_normal = sum_normal @ tbn_matrix
                 self.smooth_normal_dic[index] = smooth_normal
         
         self.octahedron_pack()
