@@ -3,6 +3,8 @@ import bpy
 import math
 from typing import Dict
 from mathutils import Vector, Matrix
+from addon_ComputeOutlineNormal.addons.addon_ComputeOutlineNormal.config import __addon_name__
+from addon_ComputeOutlineNormal.common.i18n.i18n import i18n
 
 # This Example Operator will scale up the selected object
 class ComputeOutlineNormalOperator(bpy.types.Operator):
@@ -52,14 +54,14 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     def compute_smooth_normals(self, bm):   
         #检查UV
         if not bm.loops.layers.uv[0]:
-            self.report({'ERROR'}, "No active UV")
+            self.report({'ERROR'}, i18n("No Active UV"))
             return {'CANCELED'}
         uv_layer = bm.loops.layers.uv[0]
         
         for face in bm.faces:
             #检查三角面 只允许三角面计算
             if len(face.verts)!= 3:
-                self.report({'ERROR'}, "Only Triangles")
+                self.report({'ERROR'}, i18n("Only Triangles"))
                 return {'CANCELED'}
             for i in range(3):
                 index = face.loops[i].index
@@ -140,7 +142,7 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         if "OutlineUV" not in bm.loops.layers.uv:
             bm.loops.layers.uv.new("OutlineUV")
         else:
-            self.report({'WARNING'}, "OutlineUV already exists, and we rewrite it.")
+            self.report({'WARNING'}, i18n("OutlineUV already exists, and we rewrite it."))
         uv_layer = bm.loops.layers.uv["OutlineUV"]
         
         for face in bm.faces:
