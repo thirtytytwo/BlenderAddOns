@@ -18,7 +18,7 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     smooth_normal_dic :Dict[int, Vector]
     
     tbn_matrix_dic    :Dict[int, Matrix]
-    
+
     same_normal_dic   :Dict[Vector, list[Vector]]
 
     def clean_containers(self):
@@ -35,7 +35,11 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     def octahedron_pack(self):
         for index, IN in self.smooth_normal_dic.items():
             IN = Vector(IN).normalized()
-            sum_xyz = math.fabs(IN.x) + math.fabs(IN.y) + math.fabs(IN.z)
+            sum_xyz = (math.fabs(IN.x) + math.fabs(IN.y) + math.fabs(IN.z))
+            if sum_xyz == 0.0:
+                result = Vector((0.5, 0.5))
+                self.pack_normal_dic[index] = result
+                continue
             
             u = IN.x / sum_xyz
             v = IN.y / sum_xyz
@@ -48,55 +52,23 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             self.pack_normal_dic[index] = result
             
     def compute_smooth_normals(self, bm):   
-        #检查UV
-        if not bm.loops.layers.uv[0]:
-            self.report({'ERROR'}, "No active UV")
-            return {'CANCELED'}
-        uv_layer = bm.loops.layers.uv[0]
         
         for face in bm.faces:
-            #检查三角面 只允许三角面计算
-            if len(face.verts)!= 3:
-                self.report({'ERROR'}, "Only Triangles")
-                return {'CANCELED'}
-            
-            v0 = face.loops[0].vert.co
-            v1 = face.loops[1].vert.co
-            v2 = face.loops[2].vert.co
-            
-            uv0 = face.loops[0][uv_layer].uv    
-            uv1 = face.loops[1][uv_layer].uv
-            uv2 = face.loops[2][uv_layer].uv
-            
-            edge1 = v1 - v0
-            edge2 = v2 - v0
-            
-            delta_uv1 = uv1 - uv0
-            delta_uv2 = uv2 - uv0
-            
-            f = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y)
-            tangent = Vector(f * (delta_uv2.y * edge1 - delta_uv1.y * edge2))
-            tdir = Vector(f * (delta_uv1.x * edge2 - delta_uv2.x * edge1))
-            normal = face.normal.normalized()
+            tangent = face.calc_tangent_edge_diagonal()
+            normal = face.normal
             tangent = self.ortho_normalize(tangent, normal).normalized()
-            bitangent_sign = -1.0 if normal.cross(tangent).dot(tdir) < 0.0 else 1.0
-            bitangent = Vector(normal.cross(tangent) * bitangent_sign).normalized()
-            tbn_matrix = Matrix((tangent,bitangent,normal)).transposed()
-            
-            for i in range(3):
-                index = face.loops[i].index
-                index_vec = Vector(face.verts[i].co).freeze()
+            bitangent = normal.cross(tangent).normalized()
+
+            tbn_matrix = Matrix([tangent, bitangent, normal]).transposed()
+
+            for loop in face.loops:
+                index = loop.index
+                index_vec = Vector(loop.vert.co).freeze()
 
                 self.tbn_matrix_dic[index] = tbn_matrix
-                
-                if index_vec not in self.sum_normal_dic:   
-                    self.sum_normal_dic[index_vec] = Vector(normal)
-                else:
-                    vec = self.sum_normal_dic[index_vec]
-                    if math.acos(vec.dot(normal)) < math.radians(90):
-                        continue
-                    self.sum_normal_dic[index_vec] += Vector(normal)
-        
+
+                self.sum_normal_dic[index_vec] = loop.vert.normal
+
         #得到平滑法线后转入TBN空间
         for face in bm.faces:
             for loop in face.loops:
@@ -109,7 +81,8 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                 tbn_matrix = self.tbn_matrix_dic[index] 
                 
                 smooth_normal = sum_normal @ tbn_matrix
-                smooth_normal.normalize()   
+                smooth_normal.normalize()
+
                 self.smooth_normal_dic[index] = smooth_normal
         
         self.octahedron_pack()
@@ -117,7 +90,11 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     def add_custom_data_layer(self, mesh):
         #转换bmesh
         bm = bmesh.new()
-        bm.from_mesh(mesh)  
+        bm.from_mesh(mesh)
+        bm.faces.ensure_lookup_table()  
+
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        bmesh.ops.smooth_vert(bm, verts=bm.verts, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
         
         #计算
         self.compute_smooth_normals(bm)
