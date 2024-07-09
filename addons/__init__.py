@@ -13,9 +13,13 @@ bl_info = {
     "category": "Object"
 }
 
+def menu_func(self, context):
+    self.layout.operator(ComputeOutlineNormalOperator.bl_idname)
+
 def register():
     bpy.utils.register_class(ComputeOutlineNormalPannel)
     bpy.utils.register_class(ComputeOutlineNormalOperator)
+    bpy.types.VIEW3D_MT_object.append(menu_func)
 
 def unregister():
     bpy.utils.unregister_class(ComputeOutlineNormalPannel)
