@@ -42,36 +42,34 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                 result = Vector(((1 - math.fabs(v)) * (1 if u >= 0 else -1), (1 - math.fabs(u)) * (1 if v >= 0 else -1)))
             else:
                 result = Vector((u, v))
-            val = Vector(result)
-            result = Vector(((val.x * 0.5 + 0.5), (val.y * 0.5 + 0.5)))
+            result = Vector(((result.x * 0.5 + 0.5), (result.y * 0.5 + 0.5)))
+            result = Vector((1 - result.x, result.y))
             self.pack_normal_dic[index] = Vector(result)
             
     def compute_smooth_normals(self, bm):
+        bmesh.ops.triangulate(bm, faces=bm.faces[:])
         uv_layer = bm.loops.layers.uv[0]
         for face in bm.faces:
-            normal = Vector(face.normal).normalized().freeze()
+            normal = face.normal
             for loop in face.loops:
                 index_vector = Vector(loop.vert.co).freeze()
                 
                 if index_vector not in self.sum_normal_dic:
-                    self.sum_normal_dic[index_vector] = normal
+                    self.sum_normal_dic[index_vector] = Vector(normal)
                 else:
-                    self.sum_normal_dic[index_vector] = self.sum_normal_dic[index_vector] + normal
-        
+                    self.sum_normal_dic[index_vector] += Vector(normal)
         #得到平滑法线后转入TBN空间
         for face in bm.faces:
-            #逆序
-            rever_loops = list(reversed(face.loops))
+            loops = face.loops
             
-            #根据逆序算面切线
-            v0 = rever_loops[0].vert.co
-            v1 = rever_loops[1].vert.co
-            v2 = rever_loops[2].vert.co
+            v0 = loops[0].vert.co
+            v1 = loops[1].vert.co
+            v2 = loops[2].vert.co
 
             #unity 顶点逆序，但是uv不受影响
-            uv0 = rever_loops[0][uv_layer].uv
-            uv1 = rever_loops[1][uv_layer].uv
-            uv2 = rever_loops[2][uv_layer].uv
+            uv0 = loops[0][uv_layer].uv
+            uv1 = loops[1][uv_layer].uv
+            uv2 = loops[2][uv_layer].uv
             
             dist_v0_v1 = (v1 - v0).length
             dist_v0_v2 = (v2 - v0).length
@@ -101,16 +99,39 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             bitangent = tangent.cross(normal).normalized()
             
             tbn_matrix = Matrix((tangent, bitangent, normal)).transposed()
-            for loop in face.loops:
-                index_vector = Vector(loop.vert.co).freeze()
+            
+            # Unity导入时会自动对顶点排序，但是不会对UV排序，所以要在这里对齐Unity
+            for i in range(3):
+                if i == 0:
+                    index_vector = Vector(face.loops[i].vert.co).freeze()
                 
-                sum_normal = self.sum_normal_dic[index_vector]
-                sum_normal.normalize()
+                    sum_normal = self.sum_normal_dic[index_vector]
+                    sum_normal.normalize()
                 
-                smooth_normal = sum_normal @ tbn_matrix
-                smooth_normal.normalize()
+                    smooth_normal = sum_normal @ tbn_matrix
+                    smooth_normal.normalize()
                 
-                self.smooth_normal_dic[loop.index] = smooth_normal
+                    self.smooth_normal_dic[face.loops[i + 1].index] = smooth_normal
+                elif i == 1:
+                    index_vector = Vector(face.loops[i].vert.co).freeze()
+                
+                    sum_normal = self.sum_normal_dic[index_vector]
+                    sum_normal.normalize()
+                
+                    smooth_normal = sum_normal @ tbn_matrix
+                    smooth_normal.normalize()
+                
+                    self.smooth_normal_dic[face.loops[i - 1].index] = smooth_normal
+                else:
+                    index_vector = Vector(face.loops[i].vert.co).freeze()
+                
+                    sum_normal = self.sum_normal_dic[index_vector]
+                    sum_normal.normalize()
+                
+                    smooth_normal = sum_normal @ tbn_matrix
+                    smooth_normal.normalize()
+                
+                    self.smooth_normal_dic[face.loops[i].index] = smooth_normal
         self.octahedron_pack()
 
     def add_custom_data_layer(self, mesh):
