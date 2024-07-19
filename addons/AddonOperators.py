@@ -43,12 +43,10 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             else:
                 result = Vector((u, v))
             result = Vector(((result.x * 0.5 + 0.5), (result.y * 0.5 + 0.5)))
-            result = Vector((1 - result.x, result.y))
             self.pack_normal_dic[index] = Vector(result)
             
     def compute_smooth_normals(self, bm):
         bmesh.ops.triangulate(bm, faces=bm.faces[:])
-        uv_layer = bm.loops.layers.uv[0]
         for face in bm.faces:
             normal = face.normal
             for loop in face.loops:
@@ -60,44 +58,9 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
                     self.sum_normal_dic[index_vector] += Vector(normal)
         #得到平滑法线后转入TBN空间
         for face in bm.faces:
-            loops = face.loops
-            
-            v0 = loops[0].vert.co
-            v1 = loops[1].vert.co
-            v2 = loops[2].vert.co
-
-            #unity 顶点逆序，但是uv不受影响
-            uv0 = loops[0][uv_layer].uv
-            uv1 = loops[1][uv_layer].uv
-            uv2 = loops[2][uv_layer].uv
-            
-            dist_v0_v1 = (v1 - v0).length
-            dist_v0_v2 = (v2 - v0).length
-            dist_v1_v2 = (v2 - v1).length
-            
-            if dist_v0_v1 > dist_v0_v2 and dist_v0_v1 > dist_v1_v2:
-                # v0_v1 是最长边，所以v2是两条短边的交点
-                v0, v1, v2 = v2, v0, v1
-                uv0, uv1, uv2 = uv2, uv0, uv1
-            elif dist_v0_v2 > dist_v0_v1 and dist_v0_v2 > dist_v1_v2:
-                # v0_v2 是最长边，所以v1是两条短边的交点
-                v0, v1, v2 = v1, v2, v0
-                uv0, uv1, uv2 = uv1, uv2, uv0
-
-            #计算切线
-            deltaPos1 = v1 - v0
-            deltaPos2 = v2 - v0
-
-            deltaUV1 = uv1 - uv0
-            deltaUV2 = uv2 - uv0
-
-            r = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x)
-            tangent = Vector((deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y) * r)
-
-            normal = Vector(face.normal)
-            tangent = self.ortho_normalize(tangent, normal)
-            bitangent = tangent.cross(normal).normalized()
-            
+            tangent = face.calc_tangent_edge_diagonal()
+            normal = face.normal
+            bitangent = normal.cross(tangent).normalized()
             tbn_matrix = Matrix((tangent, bitangent, normal)).transposed()
             
             # Unity导入时会自动对顶点排序，但是不会对UV排序，所以要在这里对齐Unity
