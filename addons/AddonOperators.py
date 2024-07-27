@@ -46,40 +46,79 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             self.pack_normal_dic[index] = Vector(result)
             
     def compute_smooth_normals(self, bm):
+        bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        uv_layer = bm.loops.layers.uv[0]
         for face in bm.faces:
             normal = face.normal
             for loop in face.loops:
                 vertPos = Vector(loop.vert.co)
                 rotateMatrix = Matrix.Rotation(math.radians(90), 4, 'X')
-                vertPos = rotateMatrix @ vertPos
+                vertPos = vertPos @ rotateMatrix
                 index_vector = vertPos.freeze()
 
+                angle = loop.calc_angle()
+                radians = math.radians(angle)
+                val = radians / (2 * math.pi)
                 
                 if index_vector not in self.sum_normal_dic:
-                    self.sum_normal_dic[index_vector] = Vector(normal)
+                    self.sum_normal_dic[index_vector] = Vector(normal) * val
                 else:
-                    self.sum_normal_dic[index_vector] += Vector(normal)
+                    self.sum_normal_dic[index_vector] += Vector(normal) * val
         #得到平滑法线后转入TBN空间
         for face in bm.faces:
-            tangent = face.calc_tangent_edge_pair()
-            normal = face.normal
-            bitangent = normal.cross(tangent).normalized()
-            tbn_matrix = Matrix((tangent, bitangent, normal)).transposed()
+            # v0 = face.loops[0].vert.co
+            # v1 = face.loops[1].vert.co
+            # v2 = face.loops[2].vert.co
+
+            # uv0 = face.loops[0][uv_layer].uv
+            # uv1 = face.loops[1][uv_layer].uv
+            # uv2 = face.loops[2][uv_layer].uv
+
+            # edge1 = v1 - v2
+            # edge2 = v0 - v2
+
+            # deltaUV1 = uv1 - uv2
+            # deltaUV2 = uv0 - uv1
+
+            # f = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y)
+            # tangent = Vector((edge1 * deltaUV2.y - edge2 * deltaUV1.y) * f).normalized()
+            # normal = face.normal
+            # bitangent = normal.cross(tangent).normalized()
+            # tbn_matrix = Matrix((tangent, bitangent, normal)).transposed()
             
             for loop in face.loops:
                 vertPos = Vector(loop.vert.co)
                 rotateMatrix = Matrix.Rotation(math.radians(90), 4, 'X')
-                vertPos = rotateMatrix @ vertPos
+                vertPos = vertPos @ rotateMatrix
                 index_vector = vertPos.freeze()
+
+                v0 = loop.vert.co
+                v1 = loop.link_loop_prev.vert.co
+                v2 = loop.link_loop_next.vert.co
+
+                uv0 = loop[uv_layer].uv
+                uv1 = loop.link_loop_prev[uv_layer].uv
+                uv2 = loop.link_loop_next[uv_layer].uv
+
+                edge1 = v1 - v0
+                edge2 = v2 - v0
+
+                deltaUV1 = uv1 - uv0
+                deltaUV2 = uv2 - uv0
+
+                f = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y)
+                tangent = Vector((edge1 * deltaUV2.y - edge2 * deltaUV1.y) * f).normalized()
+                normal = face.normal
+                bitangent = normal.cross(tangent).normalized()
+                tbn_matrix = Matrix((tangent, bitangent, normal)).transposed()
             
                 sum_normal = self.sum_normal_dic[index_vector]
                 sum_normal.normalize()
             
-                smooth_normal = tbn_matrix @ sum_normal
+                smooth_normal = sum_normal @ tbn_matrix
                 smooth_normal.normalize()
 
-                # smooth_normal = Vector((-sum_normal.x, sum_normal.y, sum_normal.z))
-            
+                smooth_normal = Vector((-sum_normal.x, sum_normal.y, sum_normal.z))
                 self.tangent_dic[loop.index] = tangent
                 self.smooth_normal_dic[loop.index] = smooth_normal
         self.octahedron_pack()
