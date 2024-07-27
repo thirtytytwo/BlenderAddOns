@@ -46,15 +46,11 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             self.pack_normal_dic[index] = Vector(result)
             
     def compute_smooth_normals(self, bm):
-        bmesh.ops.triangulate(bm, faces=bm.faces[:])
         uv_layer = bm.loops.layers.uv[0]
         for face in bm.faces:
             normal = face.normal
             for loop in face.loops:
-                vertPos = Vector(loop.vert.co)
-                rotateMatrix = Matrix.Rotation(math.radians(90), 4, 'X')
-                vertPos = vertPos @ rotateMatrix
-                index_vector = vertPos.freeze()
+                index_vector = Vector(loop.vert.co).freeze()
 
                 angle = loop.calc_angle()
                 radians = math.radians(angle)
@@ -87,10 +83,7 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             # tbn_matrix = Matrix((tangent, bitangent, normal)).transposed()
             
             for loop in face.loops:
-                vertPos = Vector(loop.vert.co)
-                rotateMatrix = Matrix.Rotation(math.radians(90), 4, 'X')
-                vertPos = vertPos @ rotateMatrix
-                index_vector = vertPos.freeze()
+                index_vector = Vector(loop.vert.co).freeze()
 
                 v0 = loop.vert.co
                 v1 = loop.link_loop_prev.vert.co
@@ -117,8 +110,7 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             
                 smooth_normal = sum_normal @ tbn_matrix
                 smooth_normal.normalize()
-
-                smooth_normal = Vector((-sum_normal.x, sum_normal.y, sum_normal.z))
+                
                 self.tangent_dic[loop.index] = tangent
                 self.smooth_normal_dic[loop.index] = smooth_normal
         self.octahedron_pack()
