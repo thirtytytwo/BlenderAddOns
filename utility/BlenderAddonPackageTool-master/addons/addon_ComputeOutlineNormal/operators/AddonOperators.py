@@ -1,10 +1,7 @@
-import bmesh
 import bpy
 import math
 from typing import Dict
 from mathutils import Vector, Matrix
-from addons.addon_ComputeOutlineNormal.config import __addon_name__
-from common.i18n.i18n import i18n
 
 # This Example Operator will scale up the selected object
 class ComputeOutlineNormalOperator(bpy.types.Operator):
@@ -18,16 +15,11 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     sum_normal_dic    :Dict[Vector, Vector]
     pack_normal_dic   :Dict[int, Vector]
     smooth_normal_dic :Dict[int, Vector]
-    
-    tbn_matrix_dic    :Dict[int, Matrix]
-    
-    same_normal_dic   :Dict[Vector, list[Vector]]
 
     def clean_containers(self):
         self.sum_normal_dic.clear()
         self.pack_normal_dic.clear()
         self.smooth_normal_dic.clear()
-        self.tbn_matrix_dic.clear()
         self.same_normal_dic.clear()
         
     def ortho_normalize(self, tangent, normal):
@@ -37,120 +29,59 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     def octahedron_pack(self):
         for index, IN in self.smooth_normal_dic.items():
             IN = Vector(IN).normalized()
-            if IN.z == 0:
-                self.pack_normal_dic[index] = Vector((0.5, 0.5))
-                continue
-            sum_xyz = math.fabs(IN.x) + math.fabs(IN.y) + math.fabs(IN.z)
+            sum_xyz = (math.fabs(IN.x) + math.fabs(IN.y) + math.fabs(IN.z))
             
             u = IN.x / sum_xyz
             v = IN.y / sum_xyz
+            w = IN.z / sum_xyz
 
-            if IN.z < 0.0:
-                u = ((1 - math.fabs(v)) * (1 if u >= 0 else -1))
-                v = ((1 - math.fabs(u)) * (1 if v >= 0 else -1))
-            result = Vector(((u * 0.5 + 0.5), (v * 0.5 + 0.5)))
-            self.pack_normal_dic[index] = result
+            if w < 0.0:
+                result = Vector(((1 - math.fabs(v)) * (1 if u >= 0 else -1), (1 - math.fabs(u)) * (1 if v >= 0 else -1)))
+            else:
+                result = Vector((u, v))
+            result = Vector(((result.x * 0.5 + 0.5), (result.y * 0.5 + 0.5)))
+            self.pack_normal_dic[index] = Vector(result)
             
-    def compute_smooth_normals(self, bm):   
-        #检查UV
-        if not bm.loops.layers.uv[0]:
-            self.report({'ERROR'}, i18n("No Active UV"))
-            return {'CANCELED'}
-        uv_layer = bm.loops.layers.uv[0]
-        
-        for face in bm.faces:
-            #检查三角面 只允许三角面计算
-            if len(face.verts)!= 3:
-                self.report({'ERROR'}, i18n("Only Triangles"))
-                return {'CANCELED'}
-            for i in range(3):
-                index = face.loops[i].index
-                index_vec = Vector(face.verts[i].co).freeze()
-                
-                v0 = face.loops[i].vert.co
-                v1 = face.loops[(i+1)%3].vert.co
-                v2 = face.loops[(i+2)%3].vert.co
-                uv0 = face.loops[i][uv_layer].uv    
-                uv1 = face.loops[(i+1)%3][uv_layer].uv
-                uv2 = face.loops[(i+2)%3][uv_layer].uv
-                edge1 = v1 - v0
-                edge2 = v2 - v0
-                delta_uv1 = uv1 - uv0
-                delta_uv2 = uv2 - uv0
-                
-                if (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y) == 0:
-                    matrix = Matrix()
-                    matrix.zero()
-                    self.tbn_matrix_dic[index] = matrix
-                    if index_vec not in self.sum_normal_dic:   
-                        self.sum_normal_dic[index_vec] = Vector()
-                    else:
-                        self.sum_normal_dic[index_vec] += Vector()
-                    continue
-                f = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y)
-                tangent = Vector(f * (delta_uv2.y * edge1 - delta_uv1.y * edge2))
-                normal = face.normal
-                tangent = self.ortho_normalize(tangent, normal)
-                bitangent = Vector(normal.cross(tangent)).normalized()
-                tbn_matrix = Matrix((tangent,bitangent,normal)).transposed()
-                
-                self.tbn_matrix_dic[index] = tbn_matrix
-                
-                if index_vec in self.same_normal_dic:
-                    flag = False
-                    for same_normal in self.same_normal_dic[index_vec]:
-                        if same_normal == Vector(normal):
-                            flag = True
-                            break
-                    if flag:
-                        continue
-                    else:
-                        self.same_normal_dic[index_vec].append(Vector(normal))
-                else:
-                    self.same_normal_dic[index_vec] = [Vector(normal)]
-                
-                if index_vec not in self.sum_normal_dic:   
-                    self.sum_normal_dic[index_vec] = Vector(normal)
-                else:
-                    self.sum_normal_dic[index_vec] += Vector(normal)
-        
+    def compute_smooth_normals(self, mesh):
+        mesh.calc_tangents(uvmap='UVSet0')
+        for loop in mesh.loops:
+            index_vector = Vector(mesh.vertices[loop.vertex_index].co).freeze()
+            normal = loop.normal
+            
+            if index_vector not in self.sum_normal_dic:
+                self.sum_normal_dic[index_vector] = Vector(normal)
+            else:
+                self.sum_normal_dic[index_vector] += Vector(normal)
         #得到平滑法线后转入TBN空间
-        for face in bm.faces:
-            for loop in face.loops:
-                index = loop.index
-                index_vec = Vector(loop.vert.co).freeze()
-                
-                sum_normal = self.sum_normal_dic[index_vec]
-                sum_normal = sum_normal.normalized()
-                
-                tbn_matrix = self.tbn_matrix_dic[index]
-                
-                smooth_normal = sum_normal @ tbn_matrix
-                self.smooth_normal_dic[index] = smooth_normal
+        for loop in mesh.loops:
+            index_vector = Vector(mesh.vertices[loop.vertex_index].co).freeze()
+            tangent = loop.tangent
+            normal = loop.normal
+            bitangent = loop.bitangent
+            tbn_matrix = Matrix((tangent, bitangent, normal)).transposed()
         
+            sum_normal = self.sum_normal_dic[index_vector]
+            sum_normal.normalize()
+        
+            smooth_normal = sum_normal @ tbn_matrix
+            smooth_normal.normalize()
+            
+            self.smooth_normal_dic[loop.index] = smooth_normal
         self.octahedron_pack()
 
     def add_custom_data_layer(self, mesh):
-        #转换bmesh
-        bm = bmesh.new()
-        bm.from_mesh(mesh)  
-        
         #计算
-        self.compute_smooth_normals(bm)
-        
+        self.compute_smooth_normals(mesh)
         #写入数据
-        if "OutlineUV" not in bm.loops.layers.uv:
-            bm.loops.layers.uv.new("OutlineUV")
+        if "OutlineUV" not in mesh.uv_layers.keys():
+            uv_layer = mesh.uv_layers.new(name = "OutlineUV")
         else:
-            self.report({'WARNING'}, i18n("OutlineUV already exists, and we rewrite it."))
-        uv_layer = bm.loops.layers.uv["OutlineUV"]
+            self.report({'WARNING'}, "OutlineUV already exists, and we rewrite it.")
+            uv_layer = mesh.uv_layers["OutlineUV"]
         
-        for face in bm.faces:
-            for loop in face.loops:
-                loop[uv_layer].uv = self.pack_normal_dic[loop.index]
-        #传回网格
-        bm.to_mesh(mesh)
-        bm.free()
+        for loop in mesh.loops:
+            # TODO:不能单纯loop写入,因为unity会根据顶点对应UV不同分出多的顶点
+            uv_layer.uv[loop.index].vector = Vector(self.pack_normal_dic[loop.index])
 
     @classmethod
     def poll(cls, context: bpy.types.Context):
@@ -160,9 +91,8 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         self.sum_normal_dic    = {}
         self.pack_normal_dic   = {}
         self.smooth_normal_dic = {}
-        self.tbn_matrix_dic    = {}
         self.same_normal_dic   = {}
-        
+
         objects = context.selected_objects
         for object in objects:
             mesh = object.data
