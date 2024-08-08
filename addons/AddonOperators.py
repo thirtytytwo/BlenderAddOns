@@ -4,6 +4,7 @@ from typing import Dict
 from mathutils import Vector, Matrix
 
 # This Example Operator will scale up the selected object
+# 需要抛弃Loop的结构，改用三角面结构，结合Loop对应uv数据的hashmap结构
 class ComputeOutlineNormalOperator(bpy.types.Operator):
     '''Compute Outline Normal'''
     bl_idname = "object.compute_outline_normal"
@@ -15,12 +16,12 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     sum_normal_dic    :Dict[Vector, Vector]
     pack_normal_dic   :Dict[int, Vector]
     smooth_normal_dic :Dict[int, Vector]
+    loop_dic          ={}
 
     def clean_containers(self):
         self.sum_normal_dic.clear()
         self.pack_normal_dic.clear()
         self.smooth_normal_dic.clear()
-        self.same_normal_dic.clear()
         
     def ortho_normalize(self, tangent, normal):
         result = Vector((tangent - (tangent.dot(normal) * normal))).normalized()
@@ -67,7 +68,14 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             smooth_normal = sum_normal @ tbn_matrix
             smooth_normal.normalize()
             
-            smooth_normal = Vector((-sum_normal.x, sum_normal.y, sum_normal.z))
+            uv_data = tuple(Vector(uv_layer.uv[loop.index].vector).freeze() for uv_layer in mesh.uv_layers if uv_layer.name != "OutlineUV")
+            normal = Vector(normal).freeze()
+            # vertex_color = mesh.vertex_colors[loop.index].color
+            loop_data = (uv_data, normal)
+            if loop_data not in self.loop_dic:
+                self.loop_dic[loop_data] = smooth_normal
+            else:
+                smooth_normal = self.loop_dic[loop_data]
             self.smooth_normal_dic[loop.index] = smooth_normal
         self.octahedron_pack()
 
@@ -93,7 +101,6 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         self.sum_normal_dic    = {}
         self.pack_normal_dic   = {}
         self.smooth_normal_dic = {}
-        self.same_normal_dic   = {}
 
         objects = context.selected_objects
         for object in objects:
