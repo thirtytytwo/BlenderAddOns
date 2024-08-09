@@ -1,6 +1,6 @@
 import bpy
 
-from .AddonOperators import ComputeOutlineNormalOperator
+from .BmAddonOperator import ComputeOutlineNormalOperator
 from .AddonPannel import ComputeOutlineNormalPannel
 
 bl_info = {
