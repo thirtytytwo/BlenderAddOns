@@ -1,7 +1,6 @@
 import bpy
 
-from .BmAddonOperator import ComputeOutlineNormalOperator
-from .AddonPannel import ComputeOutlineNormalPannel
+from .AddonOperators import ComputeOutlineNormalOperator
 
 bl_info = {
     "name": "ComputeOutlineNormal",
@@ -17,10 +16,8 @@ def menu_func(self, context):
     self.layout.operator(ComputeOutlineNormalOperator.bl_idname)
 
 def register():
-    bpy.utils.register_class(ComputeOutlineNormalPannel)
     bpy.utils.register_class(ComputeOutlineNormalOperator)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
 def unregister():
-    bpy.utils.unregister_class(ComputeOutlineNormalPannel)
     bpy.utils.unregister_class(ComputeOutlineNormalOperator)# removes
