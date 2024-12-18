@@ -19,24 +19,36 @@ class SdfTextureGenerateOperator(bpy.types.Operator):
             self.report({'ERROR'}, "No active object with UV map found")
             return {'CANCELLED'}
         
-        uv_layer = obj.data.uv_layers.active.data
-        image = bpy.data.images.new("UV_Texture", width=self.sdf_texture_size, height=self.sdf_texture_size)
+        # Use the existing material 'material002'
+        mat = obj.data.materials.get('Material.002')    
+        if not mat:
+            self.report({'ERROR'}, "Material 'material002' not found on the object")
+            return {'CANCELLED'}
         
-        # Generate image based on UVs
-        for poly in obj.data.polygons:
-            for loop_idx in range(poly.loop_start, poly.loop_start + poly.loop_total):
-                uv = uv_layer[loop_idx].uv
-                x = int(uv.x * self.sdf_texture_size)
-                y = int((1 - uv.y) * self.sdf_texture_size)
-                # Simple example: set pixel to white
-                image.pixels[(y * self.sdf_texture_size + x) * 4] = 1.0  # R
-                image.pixels[(y * self.sdf_texture_size + x) * 4 + 1] = 1.0  # G
-                image.pixels[(y * self.sdf_texture_size + x) * 4 + 2] = 1.0  # B
-                image.pixels[(y * self.sdf_texture_size + x) * 4 + 3] = 1.0  # A
-
-        image.filepath_raw = self.export_path
+        mat.use_nodes = True
+        nodes = mat.node_tree.nodes
+        
+        # Create a new image for baking
+        image = bpy.data.images.new("Baked_Texture", width=512, height=512)
+        
+        # Set bake settings
+        bpy.context.scene.render.engine = 'CYCLES'
+        
+        # Select the object and set it active
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        
+        # Bake the image
+        texNode = nodes.new(type='ShaderNodeTexImage')
+        texNode.image = image
+        bpy.ops.object.bake(type='EMIT', pass_filter={'COLOR'})
+        
+        # Save the baked image
+        image.filepath_raw = "C:\\Users\\xy\\Desktop\\material002_bake.png"
         image.file_format = 'PNG'
         image.save()
+        print("Baked image saved to", image.filepath_raw)
         
         return {"FINISHED"}
 
