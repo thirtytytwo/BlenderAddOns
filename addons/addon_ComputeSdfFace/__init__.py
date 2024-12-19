@@ -14,9 +14,10 @@
 import bpy
 from .SDFOperators import SdfTextureGenerator
 from .SDFPanels import ComputeSdfFacePanel
-from .Props import SdfProperties
+from .Props import SDFTextures, SdfProperties
 
 def register(): 
+    bpy.utils.register_class(SDFTextures)
     bpy.utils.register_class(SdfProperties)
     bpy.types.Scene.SdfProperties = bpy.props.PointerProperty(type=SdfProperties)
     bpy.utils.register_class(SdfTextureGenerator.SdfTextureGenerateOperator)
@@ -28,3 +29,4 @@ def unregister():
     bpy.utils.unregister_class(ComputeSdfFacePanel.ComputeSdfFacePanel)
     del bpy.types.Scene.SdfProperties
     bpy.utils.unregister_class(SdfProperties)
+    bpy.utils.unregister_class(SDFTextures)

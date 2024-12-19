@@ -8,6 +8,10 @@ TextureSize = [
     (2048, "2048", "2048")
 ]
 
+class GeneratedImage(bpy.types.PropertyGroup):
+    image: bpy.props.PointerProperty(type=bpy.types.Image)
+    name: bpy.props.StringProperty(name="Image Name")
+
 class SDFGenteratorProp(bpy.types.PropertyGroup):
     Resolution : bpy.props.EnumProperty(
         name="Resolution", 
@@ -20,3 +24,5 @@ class SDFGenteratorProp(bpy.types.PropertyGroup):
         min = 1,
         max = 10
         )
+    
+    generated_images: bpy.props.CollectionProperty(type=GeneratedImage)

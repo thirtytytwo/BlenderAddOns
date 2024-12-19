@@ -3,12 +3,16 @@ import bpy
 from enum import Enum
 
 Resolustion = [
-    ("128", "128", "128"),
-    ("256", "256", "256"),
-    ("512", "512", "512"),
-    ("1024", "1024", "1024"),
-    ("2048", "2048", "2048")
+    ("128", "128", "128", 128),
+    ("256", "256", "256", 256),
+    ("512", "512", "512", 512),
+    ("1024", "1024", "1024", 1024),
+    ("2048", "2048", "2048", 2048)
 ]
+
+class SDFTextures(bpy.types.PropertyGroup):
+    image: bpy.props.PointerProperty(type=bpy.types.Image)
+    name: bpy.props.StringProperty(name="Image Name")
 
 class SdfProperties(bpy.types.PropertyGroup):
     Iterations: bpy.props.IntProperty(
@@ -24,3 +28,4 @@ class SdfProperties(bpy.types.PropertyGroup):
         default="512",
         description="Resolution of the generated texture"
     ) # type: ignore
+    GeneratedTextures: bpy.props.CollectionProperty(type=SDFTextures)# type: ignore

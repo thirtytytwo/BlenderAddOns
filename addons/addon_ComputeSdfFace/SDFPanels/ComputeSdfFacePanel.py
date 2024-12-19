@@ -19,6 +19,11 @@ class ComputeSdfFacePanel(bpy.types.Panel):
         
         col = layout.column()
         col.operator("object.sdf_texturegenerate", text = "Generate")
+        
+        # Display generated images
+        if len(prop.GeneratedTextures) > 0:
+            col.label(text = "Generated Images")
+            col.prop(prop, "GeneratedTextures")
 
     @classmethod    
     def poll(cls, context: bpy.types.Context):
