@@ -11,8 +11,7 @@ Resolustion = [
 ]
 
 class SDFTextures(bpy.types.PropertyGroup):
-    image: bpy.props.PointerProperty(type=bpy.types.Image)
-    name: bpy.props.StringProperty(name="Image Name")
+    image: bpy.props.PointerProperty(type=bpy.types.Image)# type: ignore
 
 class SdfProperties(bpy.types.PropertyGroup):
     Iterations: bpy.props.IntProperty(

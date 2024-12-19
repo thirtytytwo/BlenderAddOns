@@ -65,7 +65,7 @@ class SdfTextureGenerateOperator(bpy.types.Operator):
         #根据插值设置循环
         angleStep = 180 / prop.Iterations
         image = bpy.data.images.new("SDFTexture0", width=int(prop.Resolution), height=int(prop.Resolution))
-        prop.GeneratedTextures.add(image)
+        prop.GeneratedTextures.add().image = image
         for i in range(prop.Iterations):
             angleDeg = i * angleStep
             angleRad = math.radians(angleDeg)
