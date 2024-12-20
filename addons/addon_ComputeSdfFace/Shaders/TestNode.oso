@@ -1,6 +1,6 @@
 OpenShadingLanguage 1.00
 # Compiled by oslc 1.13.7.0
-# options: -o C:\Users\xy\AppData\Local\Temp\tmpytx5k4rm.oso -IC:\Program Files\Blender Foundation\Blender 4.2\4.2\scripts\addons_core\cycles\shader
+# options: -o C:\Users\xy\AppData\Local\Temp\tmpynkus4nq.oso -IC:\Program Files\Blender Foundation\Blender 4.2\4.2\scripts\addons_core\cycles\shader
 shader SDFGenerateShader
 param	vector	Normal	0 0 1		%read{0,0} %write{2147483647,-1}
 param	vector	LightDir	1 0 0		%read{0,0} %write{2147483647,-1}

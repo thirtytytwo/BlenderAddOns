@@ -16,14 +16,23 @@ class ComputeSdfFacePanel(bpy.types.Panel):
         row = layout.row()
         row.prop(prop, "Iterations")
         row.prop(prop, "Resolution")
+        col = layout.column()
+        col.prop(prop, "FaceFront")
+        col.prop(prop, "FaceRight")
         
         col = layout.column()
         col.operator("object.sdf_texturegenerate", text = "Generate")
         
         # Display generated images
         if len(prop.GeneratedTextures) > 0:
-            col.label(text = "Generated Images")
-            col.prop(prop, "GeneratedTextures")
+            box = layout.box()
+            box.label(text="SDF Textures")
+            grid = box.grid_flow(row_major=True, columns=2, align=True)
+            
+            for i, tex in enumerate(prop.GeneratedTextures):
+                if tex.image:
+                    col = grid.column()
+                    col.template_ID_preview(tex, "image", hide_buttons=True)
 
     @classmethod    
     def poll(cls, context: bpy.types.Context):
