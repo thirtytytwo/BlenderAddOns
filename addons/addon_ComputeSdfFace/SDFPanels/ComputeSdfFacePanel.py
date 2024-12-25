@@ -1,6 +1,6 @@
 import bpy
 
-class ComputeSdfFacePanel(bpy.types.Panel):
+class EditorPanel(bpy.types.Panel):
     bl_label = "Compute Sdf Face"
     bl_idname = "SCENE_PT_ComputeSdfFace"
     bl_category = "Sdf Face Plugin"
@@ -9,6 +9,10 @@ class ComputeSdfFacePanel(bpy.types.Panel):
     
     def draw(self, context: bpy.types.Context):
         layout = self.layout
+        if len(context.selected_objects) == 0 or context.selected_objects[0].type != 'MESH':
+            layout.label(text="Please select a mesh object.", icon='ERROR')
+            return
+        
         row = layout.row()
         row.label(text = "SDF Generator")
         
@@ -21,7 +25,7 @@ class ComputeSdfFacePanel(bpy.types.Panel):
         col.prop(prop, "FaceRight")
         
         col = layout.column()
-        col.operator("object.sdf_texturegenerate", text = "Generate")
+        col.operator("object.sdf_med_gen", text = "Compute Medium Texture")
         
         # Display generated images
         if len(prop.GeneratedTextures) > 0:

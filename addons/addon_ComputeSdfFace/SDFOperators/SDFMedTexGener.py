@@ -4,15 +4,15 @@ import math
 
 from mathutils import Vector
 
-class SdfTextureGenerateOperator(bpy.types.Operator):
-    bl_idname = "object.sdf_texturegenerate"
-    bl_label = "SdfTextureGenerator"
+class SDFMedTexGenOperator(bpy.types.Operator):
+    bl_idname = "object.sdf_med_gen"
+    bl_label = "SDFMedTexGenOperator"
 
     @classmethod
     def poll(cls, context):
-        return context.active_object is not None
+        return len(context.selected_objects) > 0 and context.selected_objects[0].type == 'MESH'
     
-    def GetRotationVector(self,     prop):
+    def GetRotationVector(self, prop):
         axisVector = {
         '+X': Vector((1, 0, 0)),
         '+Y': Vector((0, 1, 0)), 
@@ -28,7 +28,7 @@ class SdfTextureGenerateOperator(bpy.types.Operator):
         return frontVec, rightVec, upVec
         
     def execute(self, context):
-        obj = context.active_object
+        obj = context.selected_objects[0]
         if not obj or not obj.data.uv_layers.active:
             self.report({'ERROR'}, "No active object with UV map found")
             return {'CANCELLED'}
@@ -46,14 +46,21 @@ class SdfTextureGenerateOperator(bpy.types.Operator):
         addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         shaderPath = os.path.join(addonDir, "Shaders", "TestNode.osl")
         print(addonDir)
-        
-        #生成sdf generate 材质
-        mat = obj.data.materials.get('SDFMaterial')    
-        if not mat:
-            mat = bpy.data.materials.new(name='SDFMaterial')
-            obj.data.materials.append(mat)
+
+        # 生成sdf generate 材质
+        mat = bpy.data.materials.new(name="SDFMaterial")
         mat.use_nodes = True
+        
         #绑定到object上
+        originMat = None
+        needRemoveSlotFlag = False
+        if len(obj.material_slots) == 0:
+            needRemoveSlotFlag = True
+            bpy.ops.object.material_slot_add()
+            obj.material_slots[0].material = mat
+        else:
+            originMat = obj.material_slots[0].material
+            obj.material_slots[0].material = mat
         
         nodes = mat.node_tree.nodes
         links = mat.node_tree.links
@@ -88,7 +95,7 @@ class SdfTextureGenerateOperator(bpy.types.Operator):
         lightDirNode.inputs[2].default_value = rightVec.z
         outputTexNode.interpolation = 'Closest'
         preTexNode.interpolation = 'Closest'
-        outputNode.extension = 'CLIP'
+        outputTexNode.extension = 'CLIP'
         preTexNode.extension = 'CLIP'
         
         #第0次特殊处理
@@ -121,9 +128,14 @@ class SdfTextureGenerateOperator(bpy.types.Operator):
             bpy.ops.object.bake(type='EMIT', pass_filter={'COLOR'}, use_clear=True)
         
         #结束时还原
+        bpy.data.materials.remove(mat)
+        if needRemoveSlotFlag:
+            bpy.ops.object.material_slot_remove()
+        else:
+            obj.material_slots[0].material = originMat
         
         if cyclesFlag:
-            bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+            bpy.context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
         
         return {"FINISHED"}
 

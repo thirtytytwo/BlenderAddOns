@@ -12,21 +12,21 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
-from .SDFOperators import SdfTextureGenerator
-from .SDFPanels import ComputeSdfFacePanel
-from .Props import SDFTextures, SdfProperties
+from .SDFOperators.SDFMedTexGener import SDFMedTexGenOperator
+from .SDFPanels.ComputeSdfFacePanel import EditorPanel
+from .PluginProps import SDFTextures, SdfProperties
 
 def register(): 
     bpy.utils.register_class(SDFTextures)
     bpy.utils.register_class(SdfProperties)
     bpy.types.Scene.SdfProperties = bpy.props.PointerProperty(type=SdfProperties)
-    bpy.utils.register_class(SdfTextureGenerator.SdfTextureGenerateOperator)
-    bpy.utils.register_class(ComputeSdfFacePanel.ComputeSdfFacePanel)
+    bpy.utils.register_class(SDFMedTexGenOperator)
+    bpy.utils.register_class(EditorPanel)
 
 
 def unregister(): 
-    bpy.utils.unregister_class(SdfTextureGenerator.SdfTextureGenerateOperator)
-    bpy.utils.unregister_class(ComputeSdfFacePanel.ComputeSdfFacePanel)
+    bpy.utils.unregister_class(SDFMedTexGenOperator)
+    bpy.utils.unregister_class(EditorPanel)
     del bpy.types.Scene.SdfProperties
     bpy.utils.unregister_class(SdfProperties)
     bpy.utils.unregister_class(SDFTextures)
