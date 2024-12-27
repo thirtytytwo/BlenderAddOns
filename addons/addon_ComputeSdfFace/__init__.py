@@ -13,6 +13,7 @@
 
 import bpy
 from .SDFOperators.SDFMedTexGener import SDFMedTexGenOperator
+from .SDFOperators.SDFRetTexGener import SDFRetTexGenOperator
 from .SDFPanels.ComputeSdfFacePanel import EditorPanel
 from .PluginProps import SDFTextures, SdfProperties
 
@@ -21,11 +22,13 @@ def register():
     bpy.utils.register_class(SdfProperties)
     bpy.types.Scene.SdfProperties = bpy.props.PointerProperty(type=SdfProperties)
     bpy.utils.register_class(SDFMedTexGenOperator)
+    bpy.utils.register_class(SDFRetTexGenOperator)
     bpy.utils.register_class(EditorPanel)
 
 
 def unregister(): 
     bpy.utils.unregister_class(SDFMedTexGenOperator)
+    bpy.utils.unregister_class(SDFRetTexGenOperator)
     bpy.utils.unregister_class(EditorPanel)
     del bpy.types.Scene.SdfProperties
     bpy.utils.unregister_class(SdfProperties)

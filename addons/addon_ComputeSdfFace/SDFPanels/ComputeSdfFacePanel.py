@@ -38,6 +38,9 @@ class EditorPanel(bpy.types.Panel):
                     col = grid.column()
                     col.template_ID_preview(tex, "image", hide_buttons=True)
 
+        col = layout.column()
+        col.operator("object.sdf_ret_gen", text = "Compute Ret Texture")
+
     @classmethod    
     def poll(cls, context: bpy.types.Context):
         return context.active_object is not None
