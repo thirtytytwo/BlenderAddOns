@@ -104,6 +104,7 @@ class SDFMedTexGenOperator(bpy.types.Operator):
         outputTexNode.image = image
         outputTexNode.select = True
         bpy.ops.object.bake(type='EMIT', pass_filter={'COLOR'}, use_clear=True)
+        image.update()
         
         #当存在pre了，链接node
         links.new(preTexNode.outputs['Color'], sdfComputeNode.inputs[2])
@@ -126,6 +127,7 @@ class SDFMedTexGenOperator(bpy.types.Operator):
             outputTexNode.image = image
             outputTexNode.select = True
             bpy.ops.object.bake(type='EMIT', pass_filter={'COLOR'}, use_clear=True)
+            image.update() 
         
         #结束时还原
         bpy.data.materials.remove(mat)

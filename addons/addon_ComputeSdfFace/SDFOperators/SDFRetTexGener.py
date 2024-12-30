@@ -1,5 +1,6 @@
+import concurrent.futures
+import numpy as np
 import bpy
-from concurrent.futures import ThreadPoolExecutor
 
 class Point:
     def __init__(self, dx, dy):
@@ -8,32 +9,8 @@ class Point:
     
     def GetDistance(self):
         return self.dx * self.dx + self.dy * self.dy
-
-class SDFRetTexGenOperator(bpy.types.Operator):
-    bl_idname = "object.sdf_ret_gen"
-    bl_label = "SDFRetTexGenOperator"
     
-    @classmethod
-    def poll(cls, context):
-        return len(context.selected_objects) > 0 and context.selected_objects[0].type == 'MESH'
-    
-    def execute(self, context):
-        props = context.scene.SdfProperties
-        
-        images = []
-        for tex in props.GeneratedTextures:
-            images.append(tex.image)
-        
-        retImages = []
-        #executor = ThreadPoolExecutor(max_workers=len(images))
-        #for result in executor.map(self.ComputeSDF, images):
-            #retImages.append(result)
-        
-        self.ComputeSDF(images[0])
-        
-        return {"FINISHED"}
-
-    def ComputeSDF(self, image):
+def ComputeSDF(image):
         width = image.size[0]
         height = image.size[1]
         res = max(width, height)
@@ -50,61 +27,103 @@ class SDFRetTexGenOperator(bpy.types.Operator):
                     grid1[y][x] = Point(res, res)
                     grid2[y][x] = Point(0, 0)
         #TODO 这里没有依赖关系，可以用两个线程做
-        # with ThreadPoolExecutor(max_workers=2) as executor:
-        #     future1 = executor.submit(self.ComputeGrid, grid1, height, width)
-        #     future2 = executor.submit(self.ComputeGrid, grid2, height, width)
-        #     future1.result()
-        #     future2.result()
-        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future1 = executor.submit(ComputeGrid, grid1, height, width)
+            future2 = executor.submit(ComputeGrid, grid2, height, width)
+            future1.result()
+            future2.result()
+
         #TODO 这里没有依赖关系，可以用多线程
+        retImage = bpy.data.images.new(name = image.name + "_sdf", width = width, height = height)
         for y in range(height):
             for x in range(width):
-                # d1 = grid1[y][x].GetDistance()
-                # d2 = grid2[y][x].GetDistance()
-                # val = (d1 - d2) / (d1 + d2)
-                # normalized_value = (val + 1) / 2
-                
-                image.pixels[(y * width + x) * 4 : (y * width + x) * 4 + 4] = [1, 1, 1, 1]
-        image.update()
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    futures = []
+                    for y in range(height):
+                        for x in range(width):
+                            futures.append(executor.submit(ComputePixel, grid1, grid2, retImage, x, y, width))
+                    for future in futures:
+                        future.result()
+        retImage.update()
 
-    def Get(self, grid, x, y):
-        if x >= 0 and y >=0 and x < len(grid[0]) and y < len(grid):
-            return grid[y][x]
-        else:
-            return Point(len(grid), len(grid))
-    def Compare(self, grid, point, x, y, offsetX, offsetY):
-        otherP = self.Get(grid, x + offsetX, y + offsetY)
-        otherP.dx += offsetX
-        otherP.dy += offsetY
+def ComputePixel(grid1, grid2, image, x, y, width):
+    d1 = grid1[y][x].GetDistance()
+    d2 = grid2[y][x].GetDistance()
+    val = (d1 - d2) / (d1 + d2)
+    normalized_value = (val + 1) / 2
+    image.pixels[(y * width + x) * 4 : (y * width + x) * 4 + 4] = [normalized_value] * 4
         
-        if otherP.GetDistance() < point.GetDistance():
-            point = otherP
+def Get(grid, x, y):
+    if x >= 0 and y >=0 and x < len(grid[0]) and y < len(grid):
+        return grid[y][x]
+    else:
+        return Point(len(grid), len(grid))
+        
+def Compare(grid, point, x, y, offsetX, offsetY):
+    otherP = Get(grid, x + offsetX, y + offsetY)
+    otherP.dx += offsetX
+    otherP.dy += offsetY
+    
+    if otherP.GetDistance() < point.GetDistance():
+        point = otherP
 
-    def ComputeGrid(self, grid, height, width):
-            for y in range(height):
-                for x in range(width):
-                    point = self.Get(grid, x, y)
-                    #这里没有依赖关系
-                    self.Compare(grid, point, x, y, -1, 0)
-                    self.Compare(grid, point, x, y, 0, -1)
-                    self.Compare(grid, point, x, y, -1, -1)
-                    self.Compare(grid, point, x, y, 1, -1)
-                    grid[y][x] = point
-                for x in range(width - 1, -1, -1):
-                    point = self.Get(grid, x, y)
-                    self.Compare(grid, point, x, y, 1, 0)
-                    grid[y][x] = point
-                    
-            for y in range(height - 1, -1, -1):
-                for x in range(width - 1, -1, -1):
-                    point = self.Get(grid, x, y)
-                    #这里没有依赖关系
-                    self.Compare(grid, point, x, y, 1, 0)
-                    self.Compare(grid, point, x, y, 0, 1)
-                    self.Compare(grid, point, x, y, -1, 1)
-                    self.Compare(grid, point, x, y, 1, 1)
-                    grid[y][x] = point
-                for x in range(width):
-                    point = self.Get(grid, x, y)
-                    self.Compare(grid, point, x, y, -1, 0)
-                    grid[y][x] = point
+def ComputeGrid(grid, height, width):
+        for y in range(height):
+            for x in range(width):
+                point = Get(grid, x, y)
+                #这里没有依赖关系
+                Compare(grid, point, x, y, -1, 0)
+                Compare(grid, point, x, y, 0, -1)
+                Compare(grid, point, x, y, -1, -1)
+                Compare(grid, point, x, y, 1, -1)
+                grid[y][x] = point
+            for x in range(width - 1, -1, -1):
+                point = Get(grid, x, y)
+                Compare(grid, point, x, y, 1, 0)
+                grid[y][x] = point
+                
+        for y in range(height - 1, -1, -1):
+            for x in range(width - 1, -1, -1):
+                point = Get(grid, x, y)
+                #这里没有依赖关系
+                Compare(grid, point, x, y, 1, 0)
+                Compare(grid, point, x, y, 0, 1)
+                Compare(grid, point, x, y, -1, 1)
+                Compare(grid, point, x, y, 1, 1)
+                grid[y][x] = point
+            for x in range(width):
+                point = Get(grid, x, y)
+                Compare(grid, point, x, y, -1, 0)
+                grid[y][x] = point
+
+class SDFRetTexGenOperator(bpy.types.Operator):
+    bl_idname = "object.sdf_ret_gen"
+    bl_label = "SDFRetTexGenOperator"
+    
+    @classmethod
+    def poll(cls, context):
+        return len(context.selected_objects) > 0 and context.selected_objects[0].type == 'MESH'
+    
+    def execute(self, context):
+        props = context.scene.SdfProperties
+        
+        images = []
+        for tex in props.GeneratedTextures:
+            images.append(tex.image)
+        array = np.array(images[5].pixels[:], dtype=np.float32).reshape(images[5].size[1], images[5].size[0], 4)
+        data = array[:, :, 0].flatten()
+        
+        #non_black_pixels = np.sum(data > 0)
+        #non_black_pixels = np.sum(np.any(array[:, :, :3] > 0, axis=-1))
+        #print(f"非黑色像素数量: {non_black_pixels}")
+        with concurrent.futures.process.ProcessPoolExecutor(max_workers = len(images)) as executor:
+            futures = []
+            for image in images:
+                array = np.array(image.pixels[:], dtype=np.float32).reshape(image.size[1], image.size[0], 4)
+                data = array[:, :, 0].flatten()
+                futures.append(executor.submit(ComputeSDF, data))
+            
+            for future in concurrent.futures.as_completed(futures):
+                future.result()
+        
+        return {"FINISHED"}
