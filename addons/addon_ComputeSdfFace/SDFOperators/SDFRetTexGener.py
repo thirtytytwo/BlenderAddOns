@@ -35,13 +35,6 @@ def ComputeSDF(data, width, height):
 
         #TODO 这里没有依赖关系，可以用两个线程做
         startTime = time.time()
-        # with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        #     futures = []
-        #     futures.append(executor.submit(ComputeGrid, grid1, height, width))
-        #     futures.append(executor.submit(ComputeGrid, grid2, height, width))
-            
-        #     for future in concurrent.futures.as_completed(futures):
-        #         future.result()
         ComputeGrid(grid1, height, width)
         ComputeGrid(grid2, height, width)
         endTime = time.time()
@@ -104,6 +97,7 @@ def ComputeGrid(grid, height, width):
                 # Compare(grid, point, x, y, 0, -1)
                 # Compare(grid, point, x, y, 1, -1)
                 # Compare(grid, point, x, y, -1, 0)
+            
             for j in range(width - 1, -1, -1):
                 x = j + 1
                 point = grid[y][x]
