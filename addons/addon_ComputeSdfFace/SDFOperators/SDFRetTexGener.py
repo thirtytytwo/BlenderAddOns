@@ -19,7 +19,7 @@ def ComputeSDF(data, width, height):
     
     for y in range(-1, height + 1):
         for x in range(-1, width + 1):
-            if x < 0 or y < 0 or x == width or y == height:
+            if x < 0 or y < 0 or x >= width or y >= height:
                 grid1[y + 1][x + 1] = Point(res, res)
                 grid2[y + 1][x + 1] = Point(res, res)
                 continue
@@ -47,7 +47,7 @@ def ComputePixel(grid1, grid2, x, y):
     if val < 0: val = 0
     if val > 255: val = 255
     
-    return val
+    return val / 255.0
 
 def Compare(grid, point, x, y, offsetX, offsetY):
     temp = grid[y + offsetY][x + offsetX]
@@ -72,12 +72,12 @@ def CompareSIMD(data, prevDist):
 
 def ComputeGrid(grid, height, width):
     for i in range(height):
+        y = i + 1
         for j in range(width):
             x = j + 1
-            y = i + 1
             point = grid[y][x]
             data = np.array([point.dx - 1, point.dx, point.dx - 1, point.dx + 1,
-                    point.dy, point.dy - 1, point.dy - 1, point.dy - 1], dtype=np.int32)
+                    point.dy, point.dy - 1, point.dy - 1, point.dy - 1], dtype=np.float32)
             dist = point.distance
             index = CompareSIMD(data, dist)
             if index != -1 :
@@ -91,17 +91,18 @@ def ComputeGrid(grid, height, width):
             Compare(grid, point, x, y, 1, 0)
             
     for i in range(height - 1, -1, -1):
+        y = i + 1
         for j in range(width - 1, -1, -1):
             x = j + 1
-            y = i + 1
             point = grid[y][x]
             data = np.array([point.dx + 1, point.dx, point.dx - 1, point.dx + 1,
-                    point.dy, point.dy + 1, point.dy + 1, point.dy + 1], dtype=np.int32)
+                    point.dy, point.dy + 1, point.dy + 1, point.dy + 1], dtype=np.float32)
             dist = point.distance
             index = CompareSIMD(data, dist)
             if index != -1 :
                 point.dx = data[index] 
                 point.dy = data[index + 4]
+                point.distance = data[index] * data[index] + data[index + 4] * data[index + 4]
 
         for j in range(width):
             x = j + 1
@@ -119,48 +120,21 @@ class SDFRetTexGenOperator(bpy.types.Operator):
     
     def execute(self, context):
         props = context.scene.SdfProperties
-        images = []
-        for tex in props.GeneratedTextures:
-            images.append(tex.image)
-        
-        image = props.GeneratedTextures[0].image
-        array = np.array(image.pixels[:], dtype=np.float32).reshape(image.size[1], image.size[0], 4)
-        data = array[:, :, 0].flatten()
-        
-        # startTime = time.time()
-        # ret = ComputeSDF(data, image.size[0], image.size[1])
-        # endTime = time.time()
-        # print(f"ComputeSDF 耗时: {(endTime - startTime):.2f} 秒")
-        
-        # for y in range(image.size[1]):
-        #     for x in range(image.size[0]):
-        #         index = (y * image.size[0] + x) * 4
-        #         val = ret[y * image.size[0] + x] / 255.0
-        #         image.pixels[index] = val
-        #         image.pixels[index + 1] = val
-        #         image.pixels[index + 2] = val
-        #         image.pixels[index + 3] = 1.0
-        # image.update()
-
         startTime = time.time()
-        with concurrent.futures.ThreadPoolExecutor(max_workers = len(images)) as executor:
-            futures = []
-            for image in images:
-                array = np.array(image.pixels[:], dtype=np.float32).reshape(image.size[1], image.size[0], 4)
-                data = array[:, :, 0].flatten()
-                futures.append(executor.submit(ComputeSDF, data, image.size[0], image.size[1]))
-            
-            for future in concurrent.futures.as_completed(futures):
-                temp = []
-                temp = future.result()
-                print(1)
-        # for image in images:
-        #     height = image.size[1]
-        #     width = image.size[0]
-        #     array = np.array(image.pixels[:], dtype=np.float32).reshape(width, height, 4)
-        #     data = array[:, :, 0].flatten()
-        #     ret = ComputeSDF(data, width, height)
+        for prop in props.GeneratedTextures:
+            image = prop.image
+            height = image.size[1]
+            width = image.size[0]
+            array = np.array(image.pixels[:], dtype=np.float32).reshape(width, height, 4)
+            data = array[:, :, 0].flatten()
+            ret = ComputeSDF(data, width, height)
+            color_data = np.zeros((height * width, 4), dtype=np.float32)
+            color_data[:, 0] = ret  # R
+            color_data[:, 1] = ret  # G
+            color_data[:, 2] = ret  # B
+            color_data[:, 3] = 1.0  # Alpha
+            image.pixels = [v for v in color_data.flatten()]
+            image.update()
         endTime = time.time()
-        print(f"所有ComputeSDF 耗时: {(endTime - startTime):.2f} 秒")
-        
+        print(f"操作 耗时: {(endTime - startTime):.2f} 秒")
         return {"FINISHED"}

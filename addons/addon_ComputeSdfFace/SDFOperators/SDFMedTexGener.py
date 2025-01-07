@@ -45,7 +45,6 @@ class SDFMedTexGenOperator(bpy.types.Operator):
         #Shader地址
         addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         shaderPath = os.path.join(addonDir, "Shaders", "SDFMedGen.osl")
-        print(addonDir)
 
         # 生成sdf generate 材质
         mat = bpy.data.materials.new(name="SDFMaterial")
