@@ -23,26 +23,22 @@ def add_01_to_image_pixels(image):
         computeShaderInfo.compute_source(f.read())
     computeShaderInfo.local_group_size(1, 1)
     
-    # i = size // 2
-    # while i >= 1:
-    #     computeShader = gpu.shader.create_from_info(computeShaderInfo)
-    #     computeShader.uniform_sampler("ImageInput", inputRT)
-    #     computeShader.image("ImageOutput", outputRT)
-    #     computeShader.uniform_float('sampleStep', i)
-    #     computeShader.uniform_float('size', size)
-    #     gpu.compute.dispatch(computeShader, size, size, 1)
-    #     i //= 2
-    #     if i >= 1:
-    #         temp = inputRT
-    #         inputRT = outputRT
-    #         outputRT = temp
+    i = size // 2
+    input = outputRT
+    output = inputRT
+    flag = 0
+    while i >= 1:
+        computeShader = gpu.shader.create_from_info(computeShaderInfo)
+        input = inputRT if flag % 2 == 0 else outputRT
+        output = outputRT if flag % 2 == 0 else inputRT
+        computeShader.uniform_sampler("ImageInput", input)
+        computeShader.image("ImageOutput", output)
+        computeShader.uniform_float('sampleStep', i)
+        computeShader.uniform_float('size', size)
+        gpu.compute.dispatch(computeShader, size, size, 1)
+        i //= 2
+        flag += 1
     
-    computeShader = gpu.shader.create_from_info(computeShaderInfo)
-    computeShader.uniform_sampler("ImageInput", inputRT)
-    computeShader.image("ImageOutput", outputRT)
-    computeShader.uniform_float('size', size)
-    computeShader.uniform_float('sampleStep', size // 512)
-    gpu.compute.dispatch(computeShader, size, size, 1)
     data = outputRT.read()
 
     return data

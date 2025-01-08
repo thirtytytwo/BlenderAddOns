@@ -39,7 +39,7 @@ class EditorPanel(bpy.types.Panel):
                     col.template_ID_preview(tex, "image", hide_buttons=True)
 
         col = layout.column()
-        col.operator("object.sdf_ret_gen", text = "Compute Ret Texture")
+        col.operator("object.sdf_ret_gen_gpu", text = "Compute Ret Texture")
 
     @classmethod    
     def poll(cls, context: bpy.types.Context):
