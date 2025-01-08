@@ -128,12 +128,10 @@ class SDFRetTexGenOperator(bpy.types.Operator):
             array = np.array(image.pixels[:], dtype=np.float32).reshape(width, height, 4)
             data = array[:, :, 0].flatten()
             ret = ComputeSDF(data, width, height)
-            color_data = np.zeros((height * width, 4), dtype=np.float32)
-            color_data[:, 0] = ret  # R
-            color_data[:, 1] = ret  # G
-            color_data[:, 2] = ret  # B
+            color_data = np.zeros((height, width, 4), dtype=np.float32)
+            color_data[:, :, :3] = ret
             color_data[:, 3] = 1.0  # Alpha
-            image.pixels = [v for v in color_data.flatten()]
+            image.pixels.foreach_set(color_data.ravel())
             image.update()
         endTime = time.time()
         print(f"操作 耗时: {(endTime - startTime):.2f} 秒")
