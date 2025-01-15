@@ -1,47 +1,120 @@
 import numpy as np
 import bpy
 import gpu
-import gpu_extras.presets
+import gpu_extras.batch
 import os
-def add_01_to_image_pixels(image):
 
+def GetMainLogicShaderInfo():
+    shaderInfo = gpu.types.GPUShaderCreateInfo()
+    #插入顶点着色器和片段着色器
+    addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    vertPath = os.path.join(addonDir, "Shaders", "FullScreenVert.glsl")
+    fragPath = os.path.join(addonDir, "Shaders", "JFSdfFrag.glsl")
+    with open(vertPath, "r", encoding="utf-8") as f:
+        shaderInfo.vertex_source(f.read())
+    with open(fragPath, "r", encoding="utf-8") as f:
+        shaderInfo.fragment_source(f.read())
+    #设置输入输出
+    shaderInfo.vertex_in(0, 'VEC3', 'position')
+    shaderInfo.vertex_in(1, 'VEC2', 'uv')
+    vertOut = gpu.types.GPUStageInterfaceInfo("OUTPUT")
+    vertOut.smooth('VEC2', 'uvInterp')
+    shaderInfo.vertex_out(vertOut)
+    
+    shaderInfo.sampler(0, 'FLOAT_2D', "ImageInput")
+    shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
+    #设置常量
+    shaderInfo.push_constant('FLOAT', 'sampleStep')
+    return shaderInfo
+
+def GetPreLogicShaderInfo():
+    shaderInfo = gpu.types.GPUShaderCreateInfo()
+    #插入顶点着色器和片段着色器
+    addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    vertPath = os.path.join(addonDir, "Shaders", "FullScreenVert.glsl")
+    fragPath = os.path.join(addonDir, "Shaders", "01ToUVFrag.glsl")
+    with open(vertPath, "r", encoding="utf-8") as f:
+        shaderInfo.vertex_source(f.read())
+    with open(fragPath, "r", encoding="utf-8") as f:
+        shaderInfo.fragment_source(f.read())
+    #设置输入输出
+    shaderInfo.vertex_in(0, 'VEC3', 'position')
+    shaderInfo.vertex_in(1, 'VEC2', 'uv')
+    vertOut = gpu.types.GPUStageInterfaceInfo("OUTPUT")
+    vertOut.smooth('VEC2', 'uvInterp')
+    shaderInfo.vertex_out(vertOut)
+    
+    shaderInfo.sampler(0, 'FLOAT_2D', "ImageInput")
+    shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
+    return shaderInfo
+
+def GetLastLogicShaderInfo():
+    shaderInfo = gpu.types.GPUShaderCreateInfo()
+    #插入顶点着色器和片段着色器
+    addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    vertPath = os.path.join(addonDir, "Shaders", "FullScreenVert.glsl")
+    fragPath = os.path.join(addonDir, "Shaders", "UVFragTo01.glsl")
+    with open(vertPath, "r", encoding="utf-8") as f:
+        shaderInfo.vertex_source(f.read())
+    with open(fragPath, "r", encoding="utf-8") as f:
+        shaderInfo.fragment_source(f.read())
+    #设置输入输出
+    shaderInfo.vertex_in(0, 'VEC3', 'position')
+    shaderInfo.vertex_in(1, 'VEC2', 'uv')
+    vertOut = gpu.types.GPUStageInterfaceInfo("OUTPUT")
+    vertOut.smooth('VEC2', 'uvInterp')
+    shaderInfo.vertex_out(vertOut)
+    
+    shaderInfo.sampler(0, 'FLOAT_2D', "ImageInput")
+    shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
+    return shaderInfo
+
+def add_01_to_image_pixels(image):
     size = image.size[0]
     
-    inputRT = gpu.texture.from_image(image)
-    outputRT = gpu.types.GPUTexture((size, size), format='RGBA32F')
+    texture = gpu.texture.from_image(image)
     
-    computeShaderInfo = gpu.types.GPUShaderCreateInfo()
-    computeShaderInfo.push_constant('FLOAT', 'sampleStep')
-    computeShaderInfo.push_constant('FLOAT', 'size')
+    preShader = gpu.shader.create_from_info(GetPreLogicShaderInfo())
+    mainShader = gpu.shader.create_from_info(GetMainLogicShaderInfo())
+    lastShader = gpu.shader.create_from_info(GetLastLogicShaderInfo())
+    #设置网格batch
+    vertices = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+    tex_coords = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    indices = [(0, 1, 2), (2, 3, 0)]
+    #绑定网格batch
+    preBatch = gpu_extras.batch.batch_for_shader(preShader, 'TRIS', {"position" : vertices, "uv" : tex_coords}, indices=indices)
+    mainBatch = gpu_extras.batch.batch_for_shader(mainShader, 'TRIS', {"position" : vertices, "uv" : tex_coords}, indices=indices)
+    lastBatch = gpu_extras.batch.batch_for_shader(lastShader, 'TRIS', {"position" : vertices, "uv" : tex_coords}, indices=indices)
     
-    computeShaderInfo.sampler(0, 'FLOAT_2D', "ImageInput")
-    computeShaderInfo.image(1, 'RGBA32F', "FLOAT_2D", "ImageOutput", qualifiers={"WRITE"})
+    #在主逻辑之前，尝试把颜色为一的赋值他的uv
+    offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
+    with offScreen.bind():
+        preShader.bind()
+        preShader.uniform_sampler("ImageInput", texture)
+        preBatch.draw(preShader)
+        texture = offScreen.texture_color
+    offScreen.free()
+    index = size // 2
+    while index >= 1:
+        offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
+        with offScreen.bind():
+            mainShader.bind()
+            mainShader.uniform_float("sampleStep", index/size)
+            mainShader.uniform_sampler("ImageInput", texture)
+            mainBatch.draw(mainShader)
+            texture = offScreen.texture_color
+        offScreen.free()
+        index //= 2
     
-    addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    shaderPath = os.path.join(addonDir, "Shaders", "JumpFloodSDF.glsl")
-    with open(shaderPath, "r", encoding="utf-8") as f:
-        computeShaderInfo.compute_source(f.read())
-    computeShaderInfo.local_group_size(1, 1)
+    offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
+    with offScreen.bind():
+        lastShader.bind()
+        lastShader.uniform_sampler("ImageInput", texture)
+        lastBatch.draw(lastShader)
+        texture = offScreen.texture_color
+    offScreen.free()
     
-    i = size // 2
-    input = outputRT
-    output = inputRT
-    flag = 0
-    while i >= 1:
-        computeShader = gpu.shader.create_from_info(computeShaderInfo)
-        input = inputRT if flag % 2 == 0 else outputRT
-        output = outputRT if flag % 2 == 0 else inputRT
-        computeShader.uniform_sampler("ImageInput", input)
-        computeShader.image("ImageOutput", output)
-        computeShader.uniform_float('sampleStep', i)
-        computeShader.uniform_float('size', size)
-        gpu.compute.dispatch(computeShader, size, size, 1)
-        i //= 2
-        flag += 1
-    
-    data = outputRT.read()
-
-    return data
+    return texture.read()
 
 
 
