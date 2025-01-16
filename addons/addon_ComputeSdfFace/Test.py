@@ -93,38 +93,33 @@ def ComputeGrid(grid, size):
             if dist < p0[2]:
                 grid[y][x] = (xVal, yVal,dist)
 
-class SDFRetTexGenOperator(bpy.types.Operator):
-    bl_idname = "object.sdf_ret_gen"
-    bl_label = "SDFRetTexGenOperator"
-    
-    @classmethod
-    def poll(cls, context):
-        return len(context.selected_objects) > 0 and context.selected_objects[0].type == 'MESH'
-    
-    def execute(self, context):
-        props = context.scene.SdfProperties
-        size = int(props.Resolution)
-        for prop in props.GeneratedTextures:
-            if prop.image is None: return {"FINISHED"}
-            startTime = time.time()
-            image = prop.image
-            
-            data = np.array(image.pixels[:], dtype=np.float32).reshape(size, size, 4)
-            data = data[:, :, 0].flatten()
 
-            resultData = ComputeSDF(data, size)
-            elapsedTime = time.time() - startTime
-            print(f"逻辑运行时间: {elapsedTime:.2f} 秒")
 
-            startTime = time.time()
-            pixelData = np.zeros(size * size * 4, 'f')
-            pixelData[0::4] = resultData[:]
-            pixelData[1::4] = resultData[:]
-            pixelData[2::4] = resultData[:]
-            pixelData[3::4] = 1.0
-            image.pixels.foreach_set(pixelData.ravel())
-            image.update()
-            
-            elapsedTime = time.time() - startTime
-            print(f"应用结果数据时间: {elapsedTime:.2f} 秒")
-        return {"FINISHED"}
+
+
+startTime = time.time()
+image = bpy.data.images.get('SDFTexture1')
+if image is None:
+    raise ValueError("Image 'SDFTexture1' not found in the scene")
+
+size = int(image.size[0])
+
+data = np.array(image.pixels[:], dtype=np.float32).reshape(size, size, 4)
+data = data[:, :, 0].flatten()
+
+resultData = ComputeSDF(data, size)
+elapsedTime = time.time() - startTime
+print(f"逻辑运行时间: {elapsedTime:.2f} 秒")
+
+startTime = time.time()
+pixelData = np.zeros(size * size * 4, 'f')
+pixelData[0::4] = resultData[:]
+pixelData[1::4] = resultData[:]
+pixelData[2::4] = resultData[:]
+pixelData[3::4] = 1.0
+image.pixels.foreach_set(pixelData.ravel())
+image.update()
+
+elapsedTime = time.time() - startTime
+print(f"应用结果数据时间: {elapsedTime:.2f} 秒")
+        
