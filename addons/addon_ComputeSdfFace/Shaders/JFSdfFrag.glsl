@@ -1,5 +1,5 @@
 void main(){
-    float bestDist = 10000.0;
+    float bestDist = 9999.f;
     vec2 bestUV = vec2(-1,-1);
     for(int i = -1; i <= 1; i++){
         for(int j = -1; j <= 1; j++){

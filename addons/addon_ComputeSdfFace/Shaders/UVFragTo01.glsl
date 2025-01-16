@@ -1,7 +1,5 @@
-
 void main(){
     vec2 val = texture(ImageInput, uvInterp).rg;
-    float dist = 1 - distance(val, uvInterp);
-    dist = dist * 2 - 1;
+    float dist = pow(length(val - uvInterp), 0.4);
     FragColor = vec4(dist,dist,dist, 1.0);
 }
