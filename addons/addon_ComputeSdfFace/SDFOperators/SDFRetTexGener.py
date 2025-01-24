@@ -2,6 +2,7 @@ import math
 import time
 import numpy as np
 import bpy
+from .SDFUtilities import SDFUtilities
 
 def ComputeSDF(data,size):
     
@@ -11,14 +12,14 @@ def ComputeSDF(data,size):
     for y in range(-1, size + 1):
         for x in range(-1, size + 1):
             if x < 0 or y < 0 or x >= size or y >= size:
-                grid1[y + 1][x + 1] = (size, size, size * size)
-                grid2[y + 1][x + 1] = (size, size, size * size)
+                grid1[y + 1][x + 1] = (9999, 9999, 9999 * 9999)
+                grid2[y + 1][x + 1] = (9999, 9999, 9999 * 9999)
                 continue
             elif data[(y * size + x)] < 0.5:
                 grid1[y + 1][x + 1] = (0, 0, 0)
-                grid2[y + 1][x + 1] = (size, size, size * size)
+                grid2[y + 1][x + 1] = (9999, 9999, 9999 * 9999)
             else:
-                grid1[y + 1][x + 1] = (size, size, size * size)
+                grid1[y + 1][x + 1] = (9999, 9999, 9999 * 9999)
                 grid2[y + 1][x + 1] = (0, 0, 0)
     
     ComputeGrid(grid1,size)
@@ -27,11 +28,15 @@ def ComputeSDF(data,size):
     result = []
     for i in range(size):
         for j in range(size):
-            dist = math.sqrt(float(grid1[i + 1][j + 1][2])) - math.sqrt(float(grid2[i + 1][j + 1][2]))
+            dist1 = int(math.sqrt(float(grid1[i + 1][j + 1][2])))
+            dist2 = int(math.sqrt(float(grid2[i + 1][j + 1][2])))
+            dist = (dist1 - dist2)
             val = dist * 3 + 128
-            if val < 0: val = 0
-            if val > 255: val = 255
-            result.append(val / 255.0)
+            if val >255:
+                val = 255
+            elif val < 0:
+                val = 0
+            result.append(float(val/255.0))
     return result
 
 def ComputeGrid(grid, size):
@@ -104,10 +109,15 @@ class SDFRetTexGenOperator(bpy.types.Operator):
     def execute(self, context):
         props = context.scene.SdfProperties
         size = int(props.Resolution)
-        for prop in props.GeneratedTextures:
+        
+        computeRet = []
+        clampRet = []
+        index = 0
+        for prop in props.FaceClampTextures:
             if prop.image is None: return {"FINISHED"}
             startTime = time.time()
             image = prop.image
+            clampRet.append(image)
             
             data = np.array(image.pixels[:], dtype=np.float32).reshape(size, size, 4)
             data = data[:, :, 0].flatten()
@@ -122,9 +132,23 @@ class SDFRetTexGenOperator(bpy.types.Operator):
             pixelData[1::4] = resultData[:]
             pixelData[2::4] = resultData[:]
             pixelData[3::4] = 1.0
-            image.pixels.foreach_set(pixelData.ravel())
-            image.update()
             
+            #TODO 需要确定一下image是否需要使用new这个方法，可以有其他的内部图片申请吗
+            image = bpy.data.images.new("SDFComputeTex" + str(index), width=size, height=size)
+            image.pixels = pixelData
+            image.update()
+            computeRet.append(image)
+            index += 1
             elapsedTime = time.time() - startTime
             print(f"应用结果数据时间: {elapsedTime:.2f} 秒")
+        data = SDFUtilities.SDFCombineToFaceTexture(clampRet, computeRet, size, True)
+        if data != None:
+            image = bpy.data.images.new("SDFRet", width=size, height=size)
+            data.dimensions = size * size * 4
+            image.pixels = [v for v in data]
+            image.update()
+
+        prop.GeneratedTexture = image
+        # for tex in ret:
+        #     bpy.data.images.remove(tex, do_unlink=True)
         return {"FINISHED"}

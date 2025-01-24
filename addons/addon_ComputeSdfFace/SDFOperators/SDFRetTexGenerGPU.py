@@ -3,6 +3,7 @@ import bpy
 import gpu
 import gpu_extras.batch
 import os
+from .SDFUtilities import SDFUtilities
 
 vertices = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
 tex_coords = [(0, 0), (1, 0), (1, 1), (0, 1)]
@@ -73,30 +74,6 @@ def GetLastLogicShaderInfo():
     shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
     return shaderInfo
 
-def GetCombineLogicShaderInfo():
-    shaderInfo = gpu.types.GPUShaderCreateInfo()
-    #插入顶点着色器和片段着色器
-    addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    vertPath = os.path.join(addonDir, "Shaders", "FullScreenVert.glsl")
-    fragPath = os.path.join(addonDir, "Shaders", "CombineFrag.glsl")
-    with open(vertPath, "r", encoding="utf-8") as f:
-        shaderInfo.vertex_source(f.read())
-    with open(fragPath, "r", encoding="utf-8") as f:
-        shaderInfo.fragment_source(f.read())
-    #设置输入输出
-    shaderInfo.vertex_in(0, 'VEC3', 'position')
-    shaderInfo.vertex_in(1, 'VEC2', 'uv')
-    vertOut = gpu.types.GPUStageInterfaceInfo("OUTPUT")
-    vertOut.smooth('VEC2', 'uvInterp')
-    shaderInfo.vertex_out(vertOut)
-    
-    shaderInfo.sampler(0, 'FLOAT_2D', "SDF")
-    shaderInfo.sampler(1, 'FLOAT_2D', "Pre")
-    shaderInfo.push_constant('INT', 'textureCount')
-    shaderInfo.push_constant('INT', 'flag')
-    shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
-    return shaderInfo
-
 def GenSDFTexture(image):
     size = image.size[0]
     
@@ -140,32 +117,6 @@ def GenSDFTexture(image):
     
     return texture
 
-def CombineToFaceTexture(texs, size):
-    offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
-    shader = gpu.shader.create_from_info(GetCombineLogicShaderInfo())
-    batch = gpu_extras.batch.batch_for_shader(shader, 'TRIS', {"position" : vertices, "uv" : tex_coords}, indices=indices)
-    
-    texture = None
-    with offScreen.bind():
-        shader.bind()
-        shader.uniform_int("textureCount", len(texs))
-        shader.uniform_int("flag", 0)
-        shader.uniform_sampler('SDF', texs[0])
-        batch.draw(shader)
-        texture = offScreen.texture_color
-    offScreen.free()
-    for i in range(1, len(texs)):
-        offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
-        with offScreen.bind():
-            shader.bind()
-            shader.uniform_int("textureCount", len(texs))
-            shader.uniform_int("flag", 1)
-            shader.uniform_sampler("SDF", texs[i])
-            shader.uniform_sampler("Pre", texture)
-            batch.draw(shader)
-            texture = offScreen.texture_color
-        offScreen.free()
-    return texture.read()
 
 
 
@@ -184,16 +135,29 @@ class SDFRetTexGenGPUOperator(bpy.types.Operator):
         size = int(props.Resolution)
         
         gpuTex = []
-        for tex in props.GeneratedTextures:
+        computeTexs = []
+        clampTexs = []
+        for tex in props.FaceClampTextures:
             image = tex.image
+            clampTexs.append(image)
             data = GenSDFTexture(image)
             gpuTex.append(data)
+            
+        for tex in gpuTex:
+            ret = tex.read()
+            image = bpy.data.images.new("SDF", width=size, height=size)
+            ret.dimensions = size * size * 4
+            image.pixels = [v for v in ret]
+            image.update()
+            computeTexs.append(image)
         
-        ret = CombineToFaceTexture(gpuTex, size)
+        ret = SDFUtilities.SDFCombineToFaceTexture(clampTexs, gpuTex, size)
         
         if ret != None:
             image = bpy.data.images.new("SDFRet", width=size, height=size)
             ret.dimensions = size * size * 4
             image.pixels = [v for v in ret]
             image.update()
+        for tex in computeTexs:
+            bpy.data.images.remove(tex, do_unlink=True)
         return {"FINISHED"}

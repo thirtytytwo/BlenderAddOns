@@ -47,4 +47,5 @@ class SdfProperties(bpy.types.PropertyGroup):
         default="+X",
         description="Right face direction"
     )# type: ignore
-    GeneratedTextures: bpy.props.CollectionProperty(type=SDFTextures)# type: ignore
+    FaceClampTextures: bpy.props.CollectionProperty(type=SDFTextures)# type: ignore
+    GeneratedTexture: bpy.props.PointerProperty(type=bpy.types.Image) # type: ignore

@@ -1,15 +1,17 @@
 
-void main(){
-    float sampleStep = 1.0 / float(textureCount);
-    float val = 0;
-    if(flag == 0){
-        float sdfVal = texture(SDF, uvInterp).r;
-        val = (1.0f - sdfVal) * sampleStep;
+void main() {
+    vec3 result = vec3(0, 0, 0);
+    float face = texture(Face, uvInterp).r;
+    float distA = texture(SDFA, uvInterp).r;
+    float distB = texture(SDFB, uvInterp).r;
+    result = mix(vec3(1,1,1), vec3(0,0,0), distB- distA) * face;
+
+    if(flag==1){
+        vec3 pre = texture(Pre, uvInterp).rgb;
+        result = result * weight + pre;
     }
     else{
-        float sdfVal = texture(SDF, uvInterp).r;
-        val = texture(Pre, uvInterp).r;
-        val += ((1.0f - sdfVal) * sampleStep);
+        result = result * weight;
     }
-    FragColor = vec4(val, val, val, 1.0);
+    FragColor = vec4(result, 1.0);
 }

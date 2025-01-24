@@ -28,12 +28,12 @@ class EditorPanel(bpy.types.Panel):
         col.operator("object.sdf_med_gen", text = "Compute Medium Texture")
         
         # Display generated images
-        if len(prop.GeneratedTextures) > 0:
+        if len(prop.FaceClampTextures) > 0:
             box = layout.box()
             box.label(text="SDF Textures")
             grid = box.grid_flow(row_major=True, columns=2, align=True)
             
-            for i, tex in enumerate(prop.GeneratedTextures):
+            for i, tex in enumerate(prop.FaceClampTextures):
                 if tex.image:
                     col = grid.column()
                     col.template_ID_preview(tex, "image", hide_buttons=True)
