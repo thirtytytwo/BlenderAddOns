@@ -158,6 +158,6 @@ class SDFRetTexGenGPUOperator(bpy.types.Operator):
             ret.dimensions = size * size * 4
             image.pixels = [v for v in ret]
             image.update()
-        for tex in computeTexs:
-            bpy.data.images.remove(tex, do_unlink=True)
+        # for tex in computeTexs:
+        #     bpy.data.images.remove(tex, do_unlink=True)
         return {"FINISHED"}

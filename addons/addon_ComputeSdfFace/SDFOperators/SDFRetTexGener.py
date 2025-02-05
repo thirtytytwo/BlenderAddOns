@@ -12,36 +12,38 @@ def ComputeSDF(data,size):
     for y in range(-1, size + 1):
         for x in range(-1, size + 1):
             if x < 0 or y < 0 or x >= size or y >= size:
-                grid1[y + 1][x + 1] = (9999, 9999, 9999 * 9999)
-                grid2[y + 1][x + 1] = (9999, 9999, 9999 * 9999)
+                grid1[y + 1][x + 1] = (9999, 9999, 9999 * 9999 + 9999 * 9999)
+                grid2[y + 1][x + 1] = (9999, 9999, 9999 * 9999 + 9999 * 9999)
                 continue
-            elif data[(y * size + x)] < 0.5:
+            elif data[(y * size + x)] > 0.5:
                 grid1[y + 1][x + 1] = (0, 0, 0)
-                grid2[y + 1][x + 1] = (9999, 9999, 9999 * 9999)
+                grid2[y + 1][x + 1] = (9999, 9999, 9999 * 9999 + 9999 * 9999)
             else:
-                grid1[y + 1][x + 1] = (9999, 9999, 9999 * 9999)
+                grid1[y + 1][x + 1] = (9999, 9999, 9999 * 9999 + 9999 * 9999)
                 grid2[y + 1][x + 1] = (0, 0, 0)
     
-    ComputeGrid(grid1,size)
-    ComputeGrid(grid2,size)
+    insideMax = ComputeGrid(grid1,size)
+    outsideMax = ComputeGrid(grid2,size)
     
     result = []
     for i in range(size):
         for j in range(size):
             dist1 = int(math.sqrt(float(grid1[i + 1][j + 1][2])))
             dist2 = int(math.sqrt(float(grid2[i + 1][j + 1][2])))
+            
             dist = (dist1 - dist2)
-            val = dist * 3 + 128
-            if val >255:
-                val = 255
-            elif val < 0:
-                val = 0
-            result.append(float(val/255.0))
+            c = 0.5
+            if dist < 0:
+                c += dist / math.sqrt(outsideMax) * 0.5
+            else:
+                c += dist / math.sqrt(insideMax) * 0.5
+            result.append(float(c))
     return result
 
 def ComputeGrid(grid, size):
     offsetBottomLeft = [-1, 0, -1, 1, 0, -1, -1, -1]
     offsetTopRight = [1, 0, -1, 1, 0, 1, 1, 1]
+    maxValue = -1
     for i in range(size):
         y = i + 1
         for j in range(size):
@@ -91,12 +93,16 @@ def ComputeGrid(grid, size):
         for j in range(size):
             x = j + 1
             p0 = grid[y][x]
+            if p0[2] > maxValue:
+                maxValue = float(p0[2])
             p1 = grid[y][x-1]
             xVal = p1[0] - 1
             yVal = p1[1]
             dist = xVal * xVal + yVal * yVal
             if dist < p0[2]:
                 grid[y][x] = (xVal, yVal,dist)
+                
+    return maxValue
 
 class SDFRetTexGenOperator(bpy.types.Operator):
     bl_idname = "object.sdf_ret_gen"
