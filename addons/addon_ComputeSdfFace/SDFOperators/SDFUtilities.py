@@ -51,9 +51,9 @@ def GenCombineShader():
     
     shaderInfo.sampler(0, 'FLOAT_2D', "SDFA")
     shaderInfo.sampler(1, 'FLOAT_2D', "SDFB")
-    # shaderInfo.sampler(2, 'FLOAT_2D', "Pre")
-    # shaderInfo.push_constant('FLOAT', 'weight')
-    # shaderInfo.push_constant('INT', 'flag')
+    shaderInfo.sampler(2, 'FLOAT_2D', "Pre")
+    shaderInfo.push_constant('FLOAT', 'weight')
+    shaderInfo.push_constant('INT', 'flag')
     shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
     return shaderInfo
 
@@ -131,25 +131,24 @@ class SDFUtilities:
         texture = None
         offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
         with offScreen.bind():
-            
             shader.bind()
-            # shader.uniform_float("weight", 1.0 / len(computeTexs))
+            shader.uniform_float("weight", 1.0 / (len(computeTexs) - 1))
             shader.uniform_sampler("SDFA", computeTexs[0])
             shader.uniform_sampler("SDFB", computeTexs[1])
-            # shader.uniform_int("flag", 0)   
+            shader.uniform_int("flag", 0)   
             batch.draw(shader)
             texture = offScreen.texture_color
         offScreen.free()
-        # for i in range(2, len(computeTexs)):
-        #     print(i)
-        #     offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
-        #     with offScreen.bind():
-        #         shader.bind()
-        #         shader.uniform_float("weight", 1.0 / len(computeTexs))
-        #         shader.uniform_int("flag", 1)
-        #         shader.uniform_sampler("ImageInput", computeTexs[i])
-        #         shader.uniform_sampler("Pre", texture)
-        #         batch.draw(shader)
-        #         texture = offScreen.texture_color
-        #     offScreen.free()
+        for i in range(2, len(computeTexs)):
+            offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
+            with offScreen.bind():
+                shader.bind()
+                shader.uniform_float("weight", 1.0 / (len(computeTexs) - 1))
+                shader.uniform_int("flag", 1)
+                shader.uniform_sampler("SDFA", computeTexs[i-1])
+                shader.uniform_sampler("SDFB", computeTexs[i])
+                shader.uniform_sampler("Pre", texture)
+                batch.draw(shader)
+                texture = offScreen.texture_color
+            offScreen.free()
         return texture.read()
