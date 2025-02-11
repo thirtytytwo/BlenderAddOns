@@ -2,6 +2,7 @@ import math
 import time
 import numpy as np
 import bpy
+import ctypes
 from .SDFUtilities import SDFUtilities
 
 def ComputeSDF(data,size):
@@ -104,6 +105,11 @@ def ComputeGrid(grid, size):
                 
     return maxValue
 
+class ArrayData(ctypes.Structure):
+    _fields_ = [("data", ctypes.POINTER(ctypes.c_float)), ("arraySize", ctypes.c_int)]
+class SDFData(ctypes.Structure):
+    _fields_ = [("sdfs", ctypes.POINTER(ArrayData)), ("sdfArrayNum", ctypes.c_int)]
+
 class SDFRetTexGenOperator(bpy.types.Operator):
     bl_idname = "object.sdf_ret_gen"
     bl_label = "SDFRetTexGenOperator"
@@ -119,6 +125,12 @@ class SDFRetTexGenOperator(bpy.types.Operator):
         computeRet = []
         clampRet = []
         index = 0
+        
+        lib = ctypes.CDLL("./DLLs/ComputeSDF.dll")
+        lib.ComputeSDF.argtypes = [ctypes.c_int, np.ctypeslib.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')]
+        lib.ComputeSDF.restype = ctypes.POINTER(ctypes.c_float)
+        
+        arrays = []
         for prop in props.FaceClampTextures:
             if prop.image is None: return {"FINISHED"}
             startTime = time.time()
@@ -128,7 +140,10 @@ class SDFRetTexGenOperator(bpy.types.Operator):
             data = np.array(image.pixels[:], dtype=np.float32).reshape(size, size, 4)
             data = data[:, :, 0].flatten()
 
-            resultData = ComputeSDF(data, size)
+            resultPtr = lib.ComputeSDF(size, data)
+            resultData = np.ctypeslib.as_array(resultPtr, shape=(size * size,)).copy()
+            arrays.append(resultData)
+            
             elapsedTime = time.time() - startTime
             print(f"逻辑运行时间: {elapsedTime:.2f} 秒")
 
@@ -148,6 +163,20 @@ class SDFRetTexGenOperator(bpy.types.Operator):
             elapsedTime = time.time() - startTime
             print(f"应用结果数据时间: {elapsedTime:.2f} 秒")
         data = SDFUtilities.SDFCombineToFaceTexture(clampRet, computeRet, size, True)
+        
+        # data2c = []
+        # for arr in arrays:
+        #     data = ArrayData()
+        #     data.data = arr.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+        #     data.arraySize = arr.size
+        #     data2c.append(data)
+        
+        # arrayNum = len(arrays)
+        # data2c1 = (ArrayData * arrayNum)(*data2c)
+        # sdfData = SDFData()
+        # sdfData.sdfs = data2c1
+        # sdfData.sdfArrayNum = arrayNum
+        
         if data != None:
             image = bpy.data.images.new("SDFRet", width=size, height=size)
             data.dimensions = size * size * 4
@@ -155,6 +184,6 @@ class SDFRetTexGenOperator(bpy.types.Operator):
             image.update()
 
         prop.GeneratedTexture = image
-        # for tex in ret:
-        #     bpy.data.images.remove(tex, do_unlink=True)
+        for tex in computeRet:
+            bpy.data.images.remove(tex, do_unlink=True)
         return {"FINISHED"}
