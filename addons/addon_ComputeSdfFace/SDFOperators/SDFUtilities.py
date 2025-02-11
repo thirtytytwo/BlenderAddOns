@@ -143,7 +143,7 @@ class SDFUtilities:
             offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
             with offScreen.bind():
                 shader.bind()
-                shader.uniform_float("weight", 1.0 / (len(computeTexs)))
+                shader.uniform_float("weight", 1.0 / (len(computeTexs) - 1))
                 shader.uniform_int("flag", 1)
                 shader.uniform_sampler("SDFA", computeTexs[i-1])
                 shader.uniform_sampler("SDFB", computeTexs[i])
