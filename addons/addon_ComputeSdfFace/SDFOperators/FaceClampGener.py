@@ -3,9 +3,9 @@ import bpy
 from .SDFUtilities import SDFUtilities
 from mathutils import Vector
 
-class SDFMedTexGenOperator(bpy.types.Operator):
-    bl_idname = "object.sdf_med_gen"
-    bl_label = "SDFMedTexGenOperator"
+class FaceClampTexGenOperator(bpy.types.Operator):
+    bl_idname = "object.face_clamp_gen"
+    bl_label = "FaceClampTexGenOperator"
 
     @classmethod
     def poll(cls, context):
@@ -33,6 +33,10 @@ class SDFMedTexGenOperator(bpy.types.Operator):
         
         frontVec, rightVec = self.GetRotationVector(props)
         textures = SDFUtilities.GenSDFMedTexture(mesh, size, iterations, frontVec, rightVec)
+        
+        for tex in props.FaceClampTextures:
+            if tex.image is not None:
+                bpy.data.images.remove(tex.image)
         
         props.FaceClampTextures.clear()
         for i in range(len(textures)):

@@ -2,9 +2,8 @@ import math
 import os
 
 import numpy as np
-import bpy
 import gpu
-import gpu_extras
+import gpu_extras 
 
 def GenMedTexShader():
     shaderInfo = gpu.types.GPUShaderCreateInfo()
@@ -56,6 +55,28 @@ def GenCombineShader():
     shaderInfo.push_constant('INT', 'flag')
     shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
     return shaderInfo
+
+def GenBlurShader():
+    shaderInfo = gpu.types.GPUShaderCreateInfo()
+    #插入顶点着色器和片段着色器
+    addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    vertPath = os.path.join(addonDir, "Shaders", "FullScreenVert.glsl")
+    fragPath = os.path.join(addonDir, "Shaders", "BlurFrag.glsl")
+    with open(vertPath, "r", encoding="utf-8") as f:
+        shaderInfo.vertex_source(f.read())
+    with open(fragPath, "r", encoding="utf-8") as f:
+        shaderInfo.fragment_source(f.read())
+    #设置输入输出
+    shaderInfo.vertex_in(0, 'VEC3', 'position')
+    shaderInfo.vertex_in(1, 'VEC2', 'uv')
+    vertOut = gpu.types.GPUStageInterfaceInfo("OUTPUT")
+    vertOut.smooth('VEC2', 'uvInterp')
+    shaderInfo.vertex_out(vertOut)
+    
+    shaderInfo.sampler(0, 'FLOAT_2D', "ImageInput")
+    shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
+    return shaderInfo
+
 
 def GetBatchData(mesh, needNormal = False):
     uvLayer = mesh.uv_layers["Face"]
@@ -117,9 +138,8 @@ class SDFUtilities:
         return textures
         
     @staticmethod
-    def SDFCombineToFaceTexture(clampTexs ,computeTexs, size, needToRevert = False):
+    def SDFCombineToFaceTexture(computeTexs, size, needToRevert = False):
         
-        clampTexs = [gpu.texture.from_image(tex) for tex in clampTexs]
         if needToRevert:
             computeTexs = [gpu.texture.from_image(tex) for tex in computeTexs]
         vertices = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
@@ -127,6 +147,9 @@ class SDFUtilities:
         indices = [(0, 1, 2), (2, 3, 0)]
         shader = gpu.shader.create_from_info(GenCombineShader())
         batch = gpu_extras.batch.batch_for_shader(shader, 'TRIS', {"position" : vertices, "uv" : uvs}, indices=indices)
+        
+        blurShader = gpu.shader.create_from_info(GenBlurShader())
+        blurBatch = gpu_extras.batch.batch_for_shader(blurShader, 'TRIS', {"position" : vertices, "uv" : uvs}, indices=indices)
         
         texture = None
         offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
@@ -151,4 +174,13 @@ class SDFUtilities:
                 batch.draw(shader)
                 texture = offScreen.texture_color
             offScreen.free()
+        
+        # 做一次 高斯模糊
+        offScreen = gpu.types.GPUOffScreen(size, size, format = 'RGBA32F')
+        with offScreen.bind():
+            blurShader.bind()
+            blurShader.uniform_sampler("ImageInput", texture)
+            blurBatch.draw(blurShader)
+            texture = offScreen.texture_color
+        offScreen.free()
         return texture.read()

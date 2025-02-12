@@ -14,7 +14,7 @@ class EditorPanel(bpy.types.Panel):
             return
         
         row = layout.row()
-        row.label(text = "SDF Generator")
+        row.label(text = "Face ShadowLerp Generator")
         
         prop = context.scene.SdfProperties
         row = layout.row()
@@ -25,7 +25,7 @@ class EditorPanel(bpy.types.Panel):
         col.prop(prop, "FaceRight")
         
         col = layout.column()
-        col.operator("object.sdf_med_gen", text = "Compute Medium Texture")
+        col.operator("object.face_clamp_gen", text = "Compute Face Clamp")
         
         # Display generated images
         if len(prop.FaceClampTextures) > 0:
@@ -39,7 +39,14 @@ class EditorPanel(bpy.types.Panel):
                     col.template_ID_preview(tex, "image", hide_buttons=True)
 
         col = layout.column()
-        col.operator("object.sdf_ret_gen", text = "Compute Ret Texture")
+        col.operator("object.face_shadow_gen", text = "Compute Face Shadow")
+
+        if prop.GeneratedTexture is not None:
+            col = layout.column()
+            col.label(text="Result")
+            col.template_ID_preview(prop, "GeneratedTexture", hide_buttons=True)
+        col = layout.column()
+        col.operator("object.sdf_face_clean", text = "CleanAll")
 
     @classmethod    
     def poll(cls, context: bpy.types.Context):

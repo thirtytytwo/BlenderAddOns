@@ -5,9 +5,9 @@ import bpy
 import ctypes
 from .SDFUtilities import SDFUtilities
 
-class SDFRetTexGenOperator(bpy.types.Operator):
-    bl_idname = "object.sdf_ret_gen"
-    bl_label = "SDFRetTexGenOperator"
+class FaceShadowTexGenOperator(bpy.types.Operator):
+    bl_idname = "object.face_shadow_gen"
+    bl_label = "FaceShadowTexGenOperator"
     
     @classmethod
     def poll(cls, context):
@@ -18,7 +18,7 @@ class SDFRetTexGenOperator(bpy.types.Operator):
         size = int(props.Resolution)
         
         computeRet = []
-        clampRet = []
+        clampTexs = []
         index = 0
         
         lib = ctypes.CDLL("./DLLs/ComputeSDF.dll")
@@ -30,7 +30,7 @@ class SDFRetTexGenOperator(bpy.types.Operator):
             if prop.image is None: return {"FINISHED"}
             startTime = time.time()
             image = prop.image
-            clampRet.append(image)
+            clampTexs.append(image)
             
             data = np.array(image.pixels[:], dtype=np.float32).reshape(size, size, 4)
             data = data[:, :, 0].flatten()
@@ -57,14 +57,14 @@ class SDFRetTexGenOperator(bpy.types.Operator):
             index += 1
             elapsedTime = time.time() - startTime
             print(f"应用结果数据时间: {elapsedTime:.2f} 秒")
-        data = SDFUtilities.SDFCombineToFaceTexture(clampRet, computeRet, size, True)
+        data = SDFUtilities.SDFCombineToFaceTexture(computeRet, size, True)
         if data != None:
             image = bpy.data.images.new("SDFRet", width=size, height=size)
             data.dimensions = size * size * 4
             image.pixels = [v for v in data]
             image.update()
 
-        prop.GeneratedTexture = image
+        props.GeneratedTexture = image
         for tex in computeRet:
             bpy.data.images.remove(tex, do_unlink=True)
         return {"FINISHED"}
