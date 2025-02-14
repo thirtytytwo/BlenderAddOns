@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 import gpu
-import gpu_extras 
+import gpu_extras.batch
 
 def GenMedTexShader():
     shaderInfo = gpu.types.GPUShaderCreateInfo()

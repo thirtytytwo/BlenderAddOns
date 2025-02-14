@@ -1,8 +1,8 @@
-import math
 import time
 import numpy as np
 import bpy
 import ctypes
+import os
 from .SDFUtilities import SDFUtilities
 
 class FaceShadowTexGenOperator(bpy.types.Operator):
@@ -20,8 +20,9 @@ class FaceShadowTexGenOperator(bpy.types.Operator):
         computeRet = []
         clampTexs = []
         index = 0
-        
-        lib = ctypes.CDLL("./DLLs/ComputeSDF.dll")
+        addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+        dllPath = os.path.join(addonDir, "DLLs", "ComputeSDF.dll")
+        lib = ctypes.CDLL(dllPath)
         lib.ComputeSDF.argtypes = [ctypes.c_int, np.ctypeslib.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')]
         lib.ComputeSDF.restype = ctypes.POINTER(ctypes.c_float)
         
@@ -59,12 +60,14 @@ class FaceShadowTexGenOperator(bpy.types.Operator):
             print(f"应用结果数据时间: {elapsedTime:.2f} 秒")
         data = SDFUtilities.SDFCombineToFaceTexture(computeRet, size, True)
         if data != None:
+            if props.GeneratedTexture is not None:
+                bpy.data.images.remove(props.GeneratedTexture)
             image = bpy.data.images.new("SDFRet", width=size, height=size)
             data.dimensions = size * size * 4
             image.pixels = [v for v in data]
             image.update()
-
+        
         props.GeneratedTexture = image
-        for tex in computeRet:
-            bpy.data.images.remove(tex, do_unlink=True)
+        # for tex in computeRet:
+        #     bpy.data.images.remove(tex, do_unlink=True)
         return {"FINISHED"}

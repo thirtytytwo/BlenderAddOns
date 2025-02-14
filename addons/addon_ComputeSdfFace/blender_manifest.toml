@@ -2,10 +2,10 @@ schema_version = "1.0.0"
 
 # Example of manifest file for a Blender extension
 # Change the values according to your extension
-id = "computesdfface"
+id = "addon_ComputeSdfFace"
 version = "1.0.0"
-name = "Computesdfface"
-tagline = "This is another extension"
+name = "ComputeCartoonFaceShadow"
+tagline = "for cartoon face shadow lerp"
 maintainer = "luyicheng"
 # Supported types: "add-on", "theme"
 type = "add-on"
@@ -15,7 +15,7 @@ type = "add-on"
 
 # Optional list defined by Blender and server, see:
 # https://docs.blender.org/manual/en/dev/advanced/extensions/tags.html
-tags = ["Animation", "Sequencer"]
+tags = ["3D View", "Sequencer"]
 
 blender_version_min = "4.2.0"
 # # Optional: Blender version that the extension does not support, earlier versions are supported.

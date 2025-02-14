@@ -1,8 +1,5 @@
 import bpy
 
-from .SDFUtilities import SDFUtilities
-from mathutils import Vector
-
 class CleanOperator(bpy.types.Operator):
     bl_idname = "object.sdf_face_clean"
     bl_label = "FaceTexsCleaner"

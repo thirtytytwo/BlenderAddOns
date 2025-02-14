@@ -1,5 +1,4 @@
 import bpy
-
 from .SDFUtilities import SDFUtilities
 from mathutils import Vector
 
