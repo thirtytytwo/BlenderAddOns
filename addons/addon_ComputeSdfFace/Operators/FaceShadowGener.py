@@ -68,6 +68,6 @@ class FaceShadowTexGenOperator(bpy.types.Operator):
             image.update()
         
         props.GeneratedTexture = image
-        # for tex in computeRet:
-        #     bpy.data.images.remove(tex, do_unlink=True)
+        for tex in computeRet:
+            bpy.data.images.remove(tex, do_unlink=True)
         return {"FINISHED"}
