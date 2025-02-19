@@ -29,6 +29,9 @@ class SdfProperties(bpy.types.PropertyGroup):
         max=10,
         description="iterations when generate sdf base tex"
     ) # type: ignore
+    LightAngle: bpy.props.FloatProperty(name="LightAngle", default=0, min=0, max=180, description="Light angle") # type: ignore
+    SmoothArea: bpy.props.FloatProperty(name="SmoothArea", default=0.01, min=0.001, max=0.5, description="Smooth area") # type: ignore
+    PreviewActive: bpy.props.BoolProperty(name="PreviewActive", default=False, description="Preview active") # type: ignore
     Resolution: bpy.props.EnumProperty(
         name="Resolution",
         items=Resolustion,

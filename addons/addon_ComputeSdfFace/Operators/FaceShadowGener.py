@@ -60,14 +60,18 @@ class FaceShadowTexGenOperator(bpy.types.Operator):
             print(f"应用结果数据时间: {elapsedTime:.2f} 秒")
         data = SDFUtilities.SDFCombineToFaceTexture(computeRet, size, True)
         if data != None:
-            if props.GeneratedTexture is not None:
-                bpy.data.images.remove(props.GeneratedTexture)
-            image = bpy.data.images.new("SDFRet", width=size, height=size)
-            data.dimensions = size * size * 4
-            image.pixels = [v for v in data]
-            image.update()
-        
-        props.GeneratedTexture = image
+            if props.GeneratedTexture is None:
+                image = bpy.data.images.new("SDFRet", width=size, height=size)
+                data.dimensions = size * size * 4
+                image.pixels = [v for v in data]
+                image.update()
+                props.GeneratedTexture = image
+            else:
+                data.dimensions = size * size * 4
+                props.GeneratedTexture.pixels = [v for v in data]
+                props.GeneratedTexture.update()
+        else:
+            self.report({'ERROR'}, "生成SDF图片失败")
         for tex in computeRet:
             bpy.data.images.remove(tex, do_unlink=True)
         return {"FINISHED"}

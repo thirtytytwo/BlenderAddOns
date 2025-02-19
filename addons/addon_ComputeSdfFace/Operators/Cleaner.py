@@ -1,3 +1,4 @@
+from .SDFMaterialUpdater import update_node_values
 import bpy
 
 class CleanOperator(bpy.types.Operator):
@@ -19,5 +20,9 @@ class CleanOperator(bpy.types.Operator):
         if props.GeneratedTexture is not None:
             bpy.data.images.remove(props.GeneratedTexture)
         props.GeneratedTexture = None
+
+        if props.PreviewActive:
+            bpy.app.timers.unregister(update_node_values)
+        props.PreviewActive = False
         return {"FINISHED"}
 

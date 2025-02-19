@@ -45,6 +45,11 @@ class EditorPanel(bpy.types.Panel):
             col = layout.column()
             col.label(text="Result")
             col.template_ID_preview(prop, "GeneratedTexture", hide_buttons=True)
+            previewText = "Preview" if not prop.PreviewActive else "Stop Preview"
+            col.operator("object.sdf_face_show_update", text = previewText)
+            if prop.PreviewActive:
+                col.prop(prop, "LightAngle", slider=True)
+                col.prop(prop, "SmoothArea", slider=True)
         col = layout.column()
         col.operator("object.sdf_face_clean", text = "CleanAll")
 

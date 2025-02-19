@@ -1,3 +1,4 @@
+import bpy
 import math
 import os
 
@@ -76,7 +77,6 @@ def GenBlurShader():
     shaderInfo.sampler(0, 'FLOAT_2D', "ImageInput")
     shaderInfo.fragment_out(0, 'VEC4', 'FragColor')
     return shaderInfo
-
 
 def GetBatchData(mesh, needNormal = False):
     uvLayer = mesh.uv_layers["Face"]
@@ -184,3 +184,43 @@ class SDFUtilities:
             texture = offScreen.texture_color
         offScreen.free()
         return texture.read()
+    
+    @staticmethod
+    def LoadSDFMaterialAndLink(obj, image):
+        material = bpy.data.materials.get("SDFMaterial")
+        materialCopy = None
+        flag = False
+        addonDir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+        materialPath = os.path.join(addonDir, "Blends", "SDFMaterial.blend")
+        if material is None:
+            flag = True
+            with bpy.data.libraries.load(materialPath, link = True) as (data_from, data_to):
+                data_to.materials = ["SDFMaterial_orgin"]
+            material = bpy.data.materials.get("SDFMaterial_orgin")
+            material.use_fake_user = True
+            materialCopy = material.copy()
+            materialCopy.name = "SDFMaterial"
+            
+        if obj.data.materials:
+            if obj.data.materials[0] is not None and obj.data.materials[0].name == "SDFMaterial":
+                pass
+            else:
+                if flag:
+                    obj.data.materials[0] = materialCopy
+                else:
+                    obj.data.materials[0] = material
+        else:
+            if flag:
+                obj.data.materials.append(materialCopy)
+            else:
+                obj.data.materials.append(material)
+        obj.data.materials[0].use_nodes = True
+        textureNode = next((node for node in obj.data.materials[0].node_tree.nodes if node.label == "SDFTexture"), None)
+        if textureNode is not None:
+            textureNode.image = image
+        if flag:
+            material.use_fake_user = False
+            for lib in bpy.data.libraries:
+                if lib.filepath == materialPath:
+                    bpy.data.libraries.remove(lib)
+                    break
