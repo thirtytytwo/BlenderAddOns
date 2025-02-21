@@ -2,7 +2,6 @@ import bpy
 import math
 from typing import Dict
 from mathutils import Vector, Matrix
-from common.i18n.i18n import i18n
 
 # This Example Operator will scale up the selected object
 class ComputeOutlineNormalOperator(bpy.types.Operator):
@@ -42,7 +41,7 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             result = Vector(((result.x * 0.5 + 0.5), (result.y * 0.5 + 0.5)))
             self.packNormalDic[index] = Vector(result)
             
-    def ComputSmoothNormal(self, mesh):
+    def ComputSmoothNormalMesh(self, mesh):
         mesh.calc_tangents(uvmap='MainUV')
         mesh.update()
         for loop in mesh.loops:
@@ -70,15 +69,18 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
             self.smoothNormalDic[loop.index] = smoothNormal
         #八面体打包
         self.octahedron_pack()
+    
+    def ComputeSmoothNormalBmesh(self, bmesh):
+        pass
 
     def OutlineNormalExecute(self, mesh):
         #计算
-        self.ComputSmoothNormal(mesh)
+        self.ComputSmoothNormalMesh(mesh)
         #写入数据
         if "OutlineUV" not in mesh.uv_layers.keys():
             uvLayer = mesh.uv_layers.new(name = "OutlineUV")
         else:
-            self.report({'WARNING'}, i18n("OutlineUV already exists, and we rewrite it."))
+            self.report({'WARNING'},"OutlineUV already exists, and we rewrite it.")
             uvLayer = mesh.uv_layers["OutlineUV"]
         
         for loop in mesh.loops:

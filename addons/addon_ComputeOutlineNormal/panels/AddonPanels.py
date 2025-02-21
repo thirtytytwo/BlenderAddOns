@@ -1,11 +1,7 @@
 import bpy
 
-from addons.addon_ComputeOutlineNormal.config import __addon_name__
-from addons.addon_ComputeOutlineNormal.operators.AddonOperators import ComputeOutlineNormalOperator
-from common.i18n.i18n import i18n
 
-
-class ComputeOutlineNormalPannel(bpy.types.Panel):
+class ComputeOutlineNormalPanel(bpy.types.Panel):
     bl_label = "Compute Outline Normal"
     bl_idname = "SCENE_PT_ComputeOutlineNormal"
     bl_category = "Outline Normal Plugin"
@@ -14,7 +10,8 @@ class ComputeOutlineNormalPannel(bpy.types.Panel):
     
     def draw(self, context: bpy.types.Context):
         layout = self.layout
-        layout.operator(ComputeOutlineNormalOperator.bl_idname, text=i18n("start compute"))
+        layout.operator("object.compute_outline_normal", text="Compute")
+        layout.operator("object.modifymeshvertex", text="Modify")
     
     @classmethod    
     def poll(cls, context: bpy.types.Context):
