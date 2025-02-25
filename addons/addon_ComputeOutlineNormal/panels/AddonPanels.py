@@ -11,7 +11,6 @@ class ComputeOutlineNormalPanel(bpy.types.Panel):
     def draw(self, context: bpy.types.Context):
         layout = self.layout
         layout.operator("object.compute_outline_normal", text="Compute")
-        layout.operator("object.modifymeshvertex", text="Modify")
     
     @classmethod    
     def poll(cls, context: bpy.types.Context):

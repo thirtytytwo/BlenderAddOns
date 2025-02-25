@@ -11,13 +11,11 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
 
     # 确保在操作之前备份数据，用户撤销操作时可以恢复
     bl_options = {'REGISTER', 'UNDO'}
-
-    sumNormalDic    :Dict[Vector, Vector]
+    
     packNormalDic   :Dict[int, Vector]
     smoothNormalDic :Dict[int, Vector]
 
-    def clean_containers(self):
-        self.sumNormalDic.clear()
+    def clean_containers(self): 
         self.packNormalDic.clear()
         self.smoothNormalDic.clear()
         
@@ -44,34 +42,45 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     def ComputSmoothNormalMesh(self, mesh):
         mesh.calc_tangents(uvmap='MainUV')
         mesh.update()
+        
+        vertNormalDict = {} #存储顶点法线的字典 key：顶点索引 value：顶点法线
+        vertDataCombos = {} #用于检查顶点重复数据的set，key：顶点索引 value：顶点数据
+        vertNum = 0
         for loop in mesh.loops:
-            indexVec = Vector(mesh.vertices[loop.vertex_index].co).freeze()
+            vertIndex = loop.vertex_index
             normal = loop.normal
+            combo = [round(normal.x, 4), round(normal.y, 4), round(normal.z, 4)]
+            for uvLayer in mesh.uv_layers:
+                if uvLayer.name == "OutlineUV":
+                    continue
+                uv = uvLayer.data[loop.index].uv
+                # combo.extend([uv.x, uv.y])  
             
-            if indexVec not in self.sumNormalDic:
-                self.sumNormalDic[indexVec] = Vector(normal)
-            else:
-                self.sumNormalDic[indexVec] += Vector(normal)
-        #得到平滑法线后转入TBN空间
+            comboTuple = tuple(combo)
+            if vertIndex not in vertDataCombos:
+                vertDataCombos[vertIndex] = set()
+            if comboTuple not in vertDataCombos[vertIndex]:
+                vertDataCombos[vertIndex].add(comboTuple)
+                vertNum += 1
+                if vertIndex not in vertNormalDict:
+                    vertNormalDict[vertIndex] = Vector(normal)
+                else:
+                    vertNormalDict[vertIndex] += Vector(normal)
+        print("vertNum: ", vertNum)
         for loop in mesh.loops:
-            indexVec = Vector(mesh.vertices[loop.vertex_index].co).freeze()
             tangent = loop.tangent
             normal = loop.normal
             bitangent = loop.bitangent
             tbn = Matrix((tangent, bitangent, normal)).transposed()
         
-            sumNormal = self.sumNormalDic[indexVec]
-            sumNormal.normalize()
-        
-            smoothNormal = sumNormal @ tbn
+            vertIndex= loop.vertex_index
+            vertNormal = vertNormalDict[vertIndex].normalized()
+            smoothNormal = vertNormal @ tbn
             smoothNormal.normalize()
 
             self.smoothNormalDic[loop.index] = smoothNormal
         #八面体打包
         self.octahedron_pack()
-    
-    def ComputeSmoothNormalBmesh(self, bmesh):
-        pass
 
     def OutlineNormalExecute(self, mesh):
         #计算
@@ -91,7 +100,6 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         return context.active_object is not None
 
     def execute(self, context: bpy.types.Context):
-        self.sumNormalDic    = {}
         self.packNormalDic   = {}
         self.smoothNormalDic = {}
 
