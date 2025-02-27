@@ -18,68 +18,42 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
     def clean_containers(self): 
         self.packNormalDic.clear()
         self.smoothNormalDic.clear()
-        
-    def ortho_normalize(self, tangent, normal):
-        result = Vector((tangent - (tangent.dot(normal) * normal))).normalized()
-        return result
     
     def octahedron_pack(self):
         for index, IN in self.smoothNormalDic.items():
-            IN = Vector(IN).normalized()
-            sumXYZ = (math.fabs(IN.x) + math.fabs(IN.y) + math.fabs(IN.z))
+            normal = IN.normalized()
+            sumXYZ = abs(IN.x) + abs(IN.y) + abs(IN.z)
             
-            u = IN.x / sumXYZ
-            v = IN.y / sumXYZ
-            w = IN.z / sumXYZ
+            u = normal.x / sumXYZ
+            v = normal.y / sumXYZ
+            w = normal.z / sumXYZ
 
-            if w < 0.0:
-                result = Vector(((1 - math.fabs(v)) * (1 if u >= 0 else -1), (1 - math.fabs(u)) * (1 if v >= 0 else -1)))
-            else:
-                result = Vector((u, v))
-            result = Vector(((result.x * 0.5 + 0.5), (result.y * 0.5 + 0.5)))
+            if w < 0:
+                newU = (1 - abs(v)) * (1 if u >= 0 else -1)
+                newV = (1 - abs(u)) * (1 if v >= 0 else -1)
+                u,v = newU, newV
+
+            result = Vector(((u+1)/2 , (v+1)/2))
             self.packNormalDic[index] = Vector(result)
             
     def ComputSmoothNormalMesh(self, mesh):
         mesh.calc_tangents(uvmap='MainUV')
         mesh.update()
-        
-        vertNormalDict = {} #存储顶点法线的字典 key：顶点索引 value：顶点法线
-        vertDataCombos = {} #用于检查顶点重复数据的set，key：顶点索引 value：顶点数据
-        vertNum = 0
+                
         for loop in mesh.loops:
             vertIndex = loop.vertex_index
-            normal = loop.normal
-            combo = [round(normal.x, 4), round(normal.y, 4), round(normal.z, 4)]
-            for uvLayer in mesh.uv_layers:
-                if uvLayer.name == "OutlineUV":
-                    continue
-                uv = uvLayer.data[loop.index].uv
-                # combo.extend([uv.x, uv.y])  
-            
-            comboTuple = tuple(combo)
-            if vertIndex not in vertDataCombos:
-                vertDataCombos[vertIndex] = set()
-            if comboTuple not in vertDataCombos[vertIndex]:
-                vertDataCombos[vertIndex].add(comboTuple)
-                vertNum += 1
-                if vertIndex not in vertNormalDict:
-                    vertNormalDict[vertIndex] = Vector(normal)
-                else:
-                    vertNormalDict[vertIndex] += Vector(normal)
-        print("vertNum: ", vertNum)
-        for loop in mesh.loops:
-            tangent = loop.tangent
-            normal = loop.normal
-            bitangent = loop.bitangent
+            tangent = loop.tangent.normalized()
+            normal = loop.normal.normalized()
+            bitangent = loop.bitangent.normalized()
             tbn = Matrix((tangent, bitangent, normal)).transposed()
-        
-            vertIndex= loop.vertex_index
-            vertNormal = vertNormalDict[vertIndex].normalized()
+
+            vertNormal = Vector(mesh.vertices[vertIndex].normal)
             smoothNormal = vertNormal @ tbn
             smoothNormal.normalize()
 
-            self.smoothNormalDic[loop.index] = smoothNormal
-        #八面体打包
+            # # Convert Blender's coordinate system (right-handed) to Unity's (left-handed)
+            self.smoothNormalDic[loop.index] = Vector(smoothNormal)
+        #八面体打包 
         self.octahedron_pack()
 
     def OutlineNormalExecute(self, mesh):
@@ -91,10 +65,17 @@ class ComputeOutlineNormalOperator(bpy.types.Operator):
         else:
             self.report({'WARNING'},"OutlineUV already exists, and we rewrite it.")
             uvLayer = mesh.uv_layers["OutlineUV"]
-        
         for loop in mesh.loops:
-            uvLayer.uv[loop.index].vector = Vector(self.packNormalDic[loop.index])
-
+            # uvLayer.uv[loop.index].vector = (self.smoothNormalDic[loop.index].x, self.smoothNormalDic[loop.index].y)
+            uvLayer.uv[loop.index].vector = self.packNormalDic[loop.index]
+            
+        # if "OutlineUV1" not in mesh.uv_layers.keys():
+        #     uvLayer = mesh.uv_layers.new(name = "OutlineUV1")
+        # else:
+        #     self.report({'WARNING'},"OutlineUV already exists, and we rewrite it.")
+        #     uvLayer = mesh.uv_layers["OutlineUV1"]
+        # for loop in mesh.loops:
+        #     uvLayer.uv[loop.index].vector = Vector((self.smoothNormalDic[loop.index].z, 0))
     @classmethod
     def poll(cls, context: bpy.types.Context):
         return context.active_object is not None
