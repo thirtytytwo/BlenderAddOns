@@ -35,6 +35,8 @@ class FaceShadowTexGenOperator(bpy.types.Operator):
             
             data = np.array(image.pixels[:], dtype=np.float32).reshape(size, size, 4)
             data = data[:, :, 0].flatten()
+            
+            data = np.ascontiguousarray(data)
 
             resultPtr = lib.ComputeSDF(size, data)
             resultData = np.ctypeslib.as_array(resultPtr, shape=(size * size,)).copy()
